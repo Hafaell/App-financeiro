@@ -39,7 +39,7 @@ class MesSeletor(QFrame):
         self.situacao.setObjectName("rotulo")
         textos.addWidget(self.nome)
         textos.addWidget(self.situacao)
-        self.voltar = QPushButton("Voltar ao mês atual")
+        self.voltar = QPushButton("Ir ao atual")
         self.voltar.setObjectName("voltar")
         lay.addWidget(self.antes)
         lay.addLayout(textos)

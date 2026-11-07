@@ -72,3 +72,15 @@ def avancar_parcela(parcelas: str):
 def slug(nome: str) -> str:
     base = sem_acento(nome).lower()
     return re.sub(r"[^a-z0-9]+", "_", base).strip("_") or "usuario"
+
+
+def interpretar_mes_simples(texto: str) -> str:
+    """'2027-06', '06/2027' ou 'junho 27' -> '2027-06' (usado pela data alvo das caixinhas)."""
+    return interpretar_mes(texto)
+
+
+def meses_entre(inicio: str, fim: str) -> int:
+    """Quantos meses faltam de 'inicio' até 'fim' (inclusive o de fim). Negativo se já passou."""
+    ai, mi = map(int, inicio.split("-"))
+    af, mf = map(int, fim.split("-"))
+    return (af - ai) * 12 + (mf - mi) + 1

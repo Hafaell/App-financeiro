@@ -173,6 +173,28 @@ def registrar_pagamento(pessoa: str, valor: str, descricao: str = "", mes: str =
 # ----- caixinhas -----
 
 @mcp.tool()
+def definir_meta_caixinha(dono: str, nome: str, meta: str = "", data_alvo: str = "") -> dict:
+    """Define a meta de uma caixinha e a data alvo (AAAA-MM). Vazio = remove a meta."""
+    c = next((x for x in fin().listar_caixinhas()
+              if x["dono"] == dono.strip() and x["nome"] == nome.strip()), None)
+    if not c:
+        return {"ok": False, "erro": "Caixinha não encontrada."}
+    return {"ok": fin().definir_meta_caixinha(c["id"], meta or None, data_alvo or None)}
+
+
+@mcp.tool()
+def assinaturas(mes: str = "") -> dict:
+    """Itens recorrentes do mês (assinaturas e despesas fixas), com total por mês e por ano."""
+    return fin().assinaturas(mes or None)
+
+
+@mcp.tool()
+def parcelas_futuras(mes: str = "", quantos: int = 6) -> list[dict]:
+    """Quanto ainda vai cair nos próximos meses, por cartão (compras suas com parcelas)."""
+    return fin().parcelas_futuras(mes or None, quantos)
+
+
+@mcp.tool()
 def listar_caixinhas() -> list[dict]:
     """Lista as caixinhas (dono, nome e valor)."""
     return fin().listar_caixinhas()

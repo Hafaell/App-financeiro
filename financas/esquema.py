@@ -36,6 +36,8 @@ TABELAS = [
         dono TEXT NOT NULL,
         nome TEXT NOT NULL,
         valor {REAL} NOT NULL DEFAULT 0,
+        meta {REAL},
+        data_alvo TEXT,
         UNIQUE (dono, nome)
     )""",
     """CREATE TABLE IF NOT EXISTS pagamentos (
@@ -50,7 +52,9 @@ TABELAS = [
         id {ID},
         nome TEXT NOT NULL UNIQUE,
         cor TEXT NOT NULL,
-        cor_texto TEXT NOT NULL
+        cor_texto TEXT NOT NULL,
+        dia_fechamento {INT},
+        dia_vencimento {INT}
     )""",
     """CREATE TABLE IF NOT EXISTS categorias (
         id {ID},

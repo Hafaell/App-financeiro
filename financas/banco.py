@@ -76,6 +76,12 @@ class BancoSqlite:
         for tabela in ("compras", "despesas"):
             if "categoria_id" not in colunas(tabela):
                 con.execute(f"ALTER TABLE {tabela} ADD COLUMN categoria_id INTEGER")
+        for coluna, tipo in (("meta", "REAL"), ("data_alvo", "TEXT")):
+            if coluna not in colunas("caixinhas"):
+                con.execute(f"ALTER TABLE caixinhas ADD COLUMN {coluna} {tipo}")
+        for coluna in ("dia_fechamento", "dia_vencimento"):
+            if coluna not in colunas("cartoes"):
+                con.execute(f"ALTER TABLE cartoes ADD COLUMN {coluna} INTEGER")
         if con.execute("SELECT COUNT(*) AS n FROM categorias").fetchone()["n"] == 0:
             con.executemany("INSERT INTO categorias (nome, cor, orcamento) VALUES (?,?,0)",
                             CATEGORIAS_INICIAIS)
@@ -167,7 +173,11 @@ class BancoPostgres:
             partes.append("INSERT INTO cartoes (nome, cor, cor_texto) VALUES "
                           f"({texto(nome)}, {texto(cor)}, {texto(cor_texto)}) ON CONFLICT DO NOTHING")
         partes += ["ALTER TABLE compras ADD COLUMN IF NOT EXISTS categoria_id BIGINT",
-                   "ALTER TABLE despesas ADD COLUMN IF NOT EXISTS categoria_id BIGINT"]
+                   "ALTER TABLE despesas ADD COLUMN IF NOT EXISTS categoria_id BIGINT",
+                   "ALTER TABLE caixinhas ADD COLUMN IF NOT EXISTS meta DOUBLE PRECISION",
+                   "ALTER TABLE caixinhas ADD COLUMN IF NOT EXISTS data_alvo TEXT",
+                   "ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS dia_fechamento BIGINT",
+                   "ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS dia_vencimento BIGINT"]
         for nome, cor in CATEGORIAS_INICIAIS:
             partes.append("INSERT INTO categorias (nome, cor, orcamento) VALUES "
                           f"({texto(nome)}, {texto(cor)}, 0) ON CONFLICT (nome) DO NOTHING")

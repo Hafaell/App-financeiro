@@ -3,7 +3,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QHBoxLayout, QLabel,
+    QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel,
     QListWidget, QMainWindow, QMessageBox, QPushButton,
     QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -11,6 +11,11 @@ from financas.contexto import auth, fin
 from .componentes import carregar_cores
 from .dialogos import GerenciarMeses, Login
 from .paginas.emprestimos import DevePage
+from .paginas.planejamento import PlanejamentoPage
+from .paginas.comparativo import ComparativoPage
+from .importacao_ui import ImportarPage
+from .paginas.ferramentas import FerramentasPage
+from .ferramentas_ui import BuscaDialog, BackupDialog, DatasCartoesDialog, gerar_relatorio_pdf
 from .paginas.transacoes import CartoesPage
 from .paginas.visao import VisaoPage
 from .seletor_mes import MesSeletor
@@ -66,9 +71,13 @@ class Janela(QMainWindow):
         self.visao = VisaoPage(self)
         self.cartoes = CartoesPage(self)
         self.deve = DevePage(self)
+        self.planejamento = PlanejamentoPage(self)
+        self.comparativo = ComparativoPage(self)
+        self.importar = ImportarPage(self)
+        self.ferramentas = FerramentasPage(self)
         for nome, pagina in [("Visão geral", self.visao), ("Transações", self.cartoes),
-                             ("Empréstimos", self.deve),
-]:
+                             ("Empréstimos", self.deve), ("Planejamento", self.planejamento), ("Comparativo", self.comparativo),
+                             ("Importar extrato", self.importar), ("Ferramentas", self.ferramentas)]:
             self.menu.addItem(nome)
             self.paginas.addWidget(pagina)
 
@@ -87,8 +96,6 @@ class Janela(QMainWindow):
         self.botao_virar.clicked.connect(self.virar_mes)
         topo.addWidget(self.titulo)
         topo.addStretch()
-        topo.addWidget(self.botao_meses)
-        topo.addWidget(self.botao_virar)
         topo.addWidget(self.seletor)
         col.addLayout(topo)
         col.addWidget(self.paginas, 1)
@@ -132,6 +139,23 @@ class Janela(QMainWindow):
         self.conta_nome.setText(auth().usuario_logado() or "")
         self.seletor.recarregar()
         self.atualizar_tudo()
+
+    def abrir_busca(self):
+        BuscaDialog(self).exec()
+
+    def abrir_backup(self):
+        BackupDialog(self).exec()
+
+    def abrir_datas(self):
+        DatasCartoesDialog(self).exec()
+        self.atualizar_tudo()
+
+    def exportar_pdf(self):
+        caminho, _ = QFileDialog.getSaveFileName(
+            self, "Salvar relatório", f"relatorio-{self.mes_atual()}.pdf", "PDF (*.pdf)")
+        if caminho:
+            gerar_relatorio_pdf(caminho, self.mes_atual())
+            QMessageBox.information(self, "Relatório", f"Relatório salvo em:\n{caminho}")
 
     def gerenciar_meses(self):
         GerenciarMeses(self).exec()
@@ -209,3 +233,7 @@ class Janela(QMainWindow):
             self.atualizar_tudo()
             self.statusBar().showMessage(f"Atualizado às {datetime.now():%H:%M}", 5000)
         self._atualizar_estado()
+
+
+def _metodos_ferramentas():
+    pass

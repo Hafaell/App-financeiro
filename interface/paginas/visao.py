@@ -28,6 +28,12 @@ class VisaoPage(Pagina):
         grade = QGridLayout()
         grade.setHorizontalSpacing(16)
         grade.setVerticalSpacing(16)
+        self.alerta = QLabel()
+        self.alerta.setObjectName("alerta")
+        self.alerta.setWordWrap(True)
+        self.alerta.setStyleSheet("background:#FFF9DF; border:1px solid #E5D897; border-radius:10px; padding:10px 14px; color:#6B5B12; font-weight:600;")
+        self.alerta.hide()
+        lay.addWidget(self.alerta)
         self.titulo_mes = QLabel()
         self.titulo_mes.setObjectName("secao")
         lay.addWidget(self.titulo_mes)
@@ -88,6 +94,20 @@ class VisaoPage(Pagina):
             self._grade.addWidget(card, i // colunas, i % colunas)
         for c in range(colunas):
             self._grade.setColumnStretch(c, 1)
+
+    def _atualizar_alertas(self):
+        from datetime import date
+        avisos = fin().alertas_faturas(date.today(), 5)
+        if not avisos:
+            self.alerta.hide()
+            return
+        textos = []
+        for a in avisos:
+            acao = "fecha" if a["tipo"] == "fecha" else "vence"
+            quando = "hoje" if a["faltam"] == 0 else f"em {a['faltam']} dia(s)"
+            textos.append(f"Fatura do {a['cartao']} {acao} {quando} ({a['data']})")
+        self.alerta.setText("   ·   ".join(textos))
+        self.alerta.show()
 
     def _atualizar_orcamento(self, r):
         """Orçamento de cada categoria (barra de uso) e renda do mês."""
@@ -157,6 +177,7 @@ class VisaoPage(Pagina):
     def atualizar(self):
         r = fin().resumo_mes(self.mes())
         self.titulo_mes.setText(f"Resumo de {r['mes']}")
+        self._atualizar_alertas()
         self.receitas.definir(brl(r["receitas"]))
         # Mesmo total da aba Despesas: despesas lançadas + o que é seu nos cartões
         self.despesas.definir(brl(r["despesas_manuais"] + r["meu_cartao_total"]))

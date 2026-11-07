@@ -1,5 +1,5 @@
 """Página Transações: compras de todos os cartões."""
-from PySide6.QtWidgets import (
+from PySide6.QtWidgets import (QLineEdit, 
     QDialog, QHBoxLayout, QLabel, QMessageBox,
     QPushButton, QVBoxLayout,
 )
@@ -26,8 +26,6 @@ class CartoesPage(Pagina):
         self.filtro = combo([])
         self.filtro.setMinimumWidth(190)
         self.filtro.currentIndexChanged.connect(self._filtro_mudou)
-        novo = QPushButton("Novo cartão")
-        novo.clicked.connect(lambda: self.novo_cartao(selecionar=False))
         apagar = QPushButton("Apagar selecionada")
         apagar.clicked.connect(self.apagar)
         nova = QPushButton("Nova compra")
@@ -38,10 +36,14 @@ class CartoesPage(Pagina):
         cats = QPushButton("Categorias")
         cats.clicked.connect(self.abrir_categorias)
         barra.addWidget(cats)
-        barra.addWidget(novo)
         barra.addWidget(apagar)
         barra.addWidget(nova)
         lay.addLayout(barra)
+        self.busca = QLineEdit()
+        self.busca.setPlaceholderText("Buscar nesta tabela: digite o nome do item, pessoa ou categoria")
+        self.busca.setClearButtonEnabled(True)
+        self.busca.textChanged.connect(self._aplicar_busca)
+        lay.addWidget(self.busca)
         self.tab = nova_tabela(self.COLUNAS)
         self.tab.setItemDelegateForColumn(0, BalaoCartao(self.tab))
         self.tab.doubleClicked.connect(lambda _i: self.editar())
@@ -94,10 +96,19 @@ class CartoesPage(Pagina):
                 "Sim" if c["recorrente"] else "Não", _pessoa_exibida(c),
                 brl(c["valor_real"]) if c["valor_real"] is not None else "—",
             ]) for c in linhas], cartao_col=0)
+        self._aplicar_busca()
         r = fin().resumo_mes(self.mes())
         self.totais.setText(
             f"Meu cartão: {brl(r['meu_cartao_total'])}      "
             f"Com empréstimos: {brl(r['cartoes_com_emprestimos_total'])}")
+
+    def _aplicar_busca(self, *_):
+        """Mostra só as linhas em que algum campo contém o texto digitado (sem diferenciar maiúsculas)."""
+        termo = self.busca.text().strip().lower()
+        for linha in range(self.tab.rowCount()):
+            textos = [self.tab.item(linha, c).text().lower() for c in range(self.tab.columnCount())
+                      if self.tab.item(linha, c) is not None]
+            self.tab.setRowHidden(linha, bool(termo) and not any(termo in x for x in textos))
 
     def editar(self):
         id_ = selecionado(self.tab)

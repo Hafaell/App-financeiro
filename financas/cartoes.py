@@ -17,6 +17,47 @@ class Cartoes:
                 return cartao["nome"]
         raise ValueError(f"Cartão inválido: '{nome}'. Cadastre o cartão primeiro.")
 
+    @staticmethod
+    def _dia(valor, nome):
+        if valor in (None, ""):
+            return None
+        d = int(valor)
+        if not 1 <= d <= 31:
+            raise ValueError(f"O dia de {nome} precisa estar entre 1 e 31.")
+        return d
+
+    def definir_datas(self, id_, fechamento=None, vencimento=None) -> bool:
+        """Dia do fechamento e do vencimento da fatura (opcionais)."""
+        f = self._dia(fechamento, "fechamento")
+        v = self._dia(vencimento, "vencimento")
+        _, n = self.banco.gravar("UPDATE cartoes SET dia_fechamento = ?, dia_vencimento = ? WHERE id = ?",
+                                 (f, v, int(id_)))
+        if n == 0:
+            raise ValueError("Cartão não encontrado.")
+        return True
+
+    def alertas(self, hoje, dias=5) -> list:
+        """Faturas que fecham ou vencem nos próximos 'dias' dias (a partir de 'hoje', um date)."""
+        from datetime import timedelta
+        import calendar
+        saida = []
+        for cartao in self.listar():
+            for tipo, chave in (("fecha", "dia_fechamento"), ("vence", "dia_vencimento")):
+                dia = cartao[chave]
+                if not dia:
+                    continue
+                ultimo = calendar.monthrange(hoje.year, hoje.month)[1]
+                alvo = hoje.replace(day=min(dia, ultimo))
+                if alvo < hoje:
+                    proximo = (hoje.replace(day=1) + timedelta(days=32)).replace(day=1)
+                    ultimo2 = calendar.monthrange(proximo.year, proximo.month)[1]
+                    alvo = proximo.replace(day=min(dia, ultimo2))
+                faltam = (alvo - hoje).days
+                if faltam <= dias:
+                    saida.append({"cartao": cartao["nome"], "tipo": tipo, "faltam": faltam,
+                                  "data": alvo.strftime("%d/%m/%Y")})
+        return sorted(saida, key=lambda x: x["faltam"])
+
     def adicionar(self, nome, cor) -> bool:
         nome = str(nome or "").strip()
         if not nome:
