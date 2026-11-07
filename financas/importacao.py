@@ -26,11 +26,33 @@ def _data(texto):
     return None
 
 
-def _item(data, descricao, valor):
-    """Padroniza um lançamento. Valores negativos (OFX) ou com crédito indicado viram 'credito'."""
-    credito = valor > 0 and any(p in descricao.lower() for p in PALAVRAS_CREDITO)
-    return {"data": data, "descricao": descricao.strip() or "(sem descrição)",
+PARCELA_RE = re.compile(r"\s*-?\s*parcela\s+(\d+)\s*/\s*(\d+)\s*$", re.IGNORECASE)
+
+
+def _separar_parcela(descricao):
+    """'Youcom Fl129 - Parcela 1/3' -> ('Youcom Fl129', '1/3'). Sem parcela: '1/1'."""
+    m = PARCELA_RE.search(descricao)
+    if not m:
+        return descricao.strip(), "1/1"
+    return descricao[:m.start()].strip(), f"{m.group(1)}/{m.group(2)}"
+
+
+def _item(data, descricao, valor, credito_por_sinal=False):
+    """Padroniza um lançamento. Crédito = pagamento/estorno (sinal negativo no CSV do Nubank,
+    ou valor positivo com palavra de crédito)."""
+    texto, parcelas = _separar_parcela(descricao or "")
+    credito = credito_por_sinal or (valor > 0 and any(p in texto.lower() for p in PALAVRAS_CREDITO))
+    return {"data": data, "descricao": texto or "(sem descrição)", "parcelas": parcelas,
             "valor": round(abs(valor), 2), "credito": credito}
+
+
+def banco_do_arquivo(nome_arquivo):
+    """Nome do cartão sugerido pelo arquivo ('Nubank_2026-11-15.csv' -> 'Nubank')."""
+    base = nome_arquivo.replace("\\", "/").split("/")[-1].lower()
+    for banco in ("nubank", "inter"):
+        if banco in base:
+            return banco.capitalize()
+    return None
 
 
 def ler_csv(texto):
@@ -46,7 +68,7 @@ def ler_csv(texto):
     else:
         corpo = linhas[1:]
         i_data = _achar(cabecalho, ["data", "date"])
-        i_desc = _achar(cabecalho, ["descri", "histórico", "historico", "estabelec", "lançamento", "lancamento", "nome"])
+        i_desc = _achar(cabecalho, ["descri", "histórico", "historico", "estabelec", "lançamento", "lancamento", "nome", "title"])
         i_val = _achar(cabecalho, ["valor", "value", "amount", "montante"])
         if None in (i_data, i_desc, i_val):
             raise ValueError("Não encontrei as colunas de data, descrição e valor no CSV.")
@@ -61,7 +83,8 @@ def ler_csv(texto):
             valor = dinheiro(linha[i_val])
         except ValueError:
             continue
-        itens.append(_item(data, linha[i_desc], valor))
+        # No CSV do Nubank, pagamentos vêm com sinal negativo; compras, positivo
+        itens.append(_item(data, linha[i_desc], valor, credito_por_sinal=valor < 0))
     return itens
 
 
@@ -80,8 +103,7 @@ def ler_ofx(texto):
             continue
         descricao = campo("MEMO") or campo("NAME")
         # No OFX, compras de cartão vêm negativas: o sinal indica gasto, não crédito
-        item = _item(data, descricao, valor)
-        item["credito"] = valor > 0
+        item = _item(data, descricao, valor, credito_por_sinal=valor > 0)
         itens.append(item)
     return itens
 
@@ -101,7 +123,7 @@ def marcar_situacao(itens, existentes_compras, existentes_despesas, mes):
         chave = (it["descricao"].strip().lower(), it["valor"])
         it["mes_fora"] = it["data"][:7] != mes
         if it["credito"]:
-            it["situacao"] = "Crédito (não importar)"
+            it["situacao"] = "Pagamento / crédito (não importar)"
         elif chave in chaves_c or chave in chaves_d:
             it["situacao"] = "Já lançado"
         else:

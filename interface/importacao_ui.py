@@ -1,11 +1,12 @@
 """Importação de extrato (CSV ou OFX): arraste o arquivo ou escolha no computador,
 confira cada linha e só então grave."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QHeaderView,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QLineEdit,
                                QLabel, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 from financas.contexto import fin
 
+from financas.importacao import banco_do_arquivo
 from .formatacao import brl, categorias_opcoes, id_categoria, nomes_cartoes
 from .paginas.base import Pagina
 
@@ -62,8 +63,9 @@ class ImportarPage(Pagina):
         linha.addWidget(self.destino)
         lay.addLayout(linha)
 
-        self.tabela = QTableWidget(0, 6)
-        self.tabela.setHorizontalHeaderLabels(["Importar", "Data", "Descrição", "Valor", "Categoria", "Situação"])
+        self.tabela = QTableWidget(0, 8)
+        self.tabela.setHorizontalHeaderLabels(["Importar", "Data", "Descrição", "Parcela", "Valor",
+                                               "Pessoa (empréstimo)", "Categoria", "Situação"])
         self.tabela.verticalHeader().setVisible(False)
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tabela.setAlternatingRowColors(True)
@@ -98,6 +100,9 @@ class ImportarPage(Pagina):
             QMessageBox.warning(self, "Extrato", str(e))
             return
         self.arquivo.setText(caminho.replace("\\", "/").split("/")[-1])
+        sugerido = banco_do_arquivo(caminho)
+        if sugerido and sugerido in nomes_cartoes():
+            self.destino.setCurrentText(sugerido)
         self._preencher()
 
     def _preencher(self):
@@ -110,13 +115,16 @@ class ImportarPage(Pagina):
             self.tabela.setItem(linha, 0, marca)
             situacao = it["situacao"] + (" · data fora do mês" if it["mes_fora"] else "")
             data = it["data"][8:] + "/" + it["data"][5:7] + "/" + it["data"][:4]
-            for col, valor in ((1, data), (2, it["descricao"]), (3, brl(it["valor"])), (5, situacao)):
+            for col, valor in ((1, data), (2, it["descricao"]), (3, it["parcelas"]), (4, brl(it["valor"])), (7, situacao)):
                 cel = QTableWidgetItem(valor)
                 cel.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.tabela.setItem(linha, col, cel)
+            pessoa = QLineEdit()
+            pessoa.setPlaceholderText("vazio = você")
+            self.tabela.setCellWidget(linha, 5, pessoa)
             combo = QComboBox()
             combo.addItems(categorias_opcoes())
-            self.tabela.setCellWidget(linha, 4, combo)
+            self.tabela.setCellWidget(linha, 6, combo)
         self.botao.setEnabled(bool(self.itens))
         novos = sum(1 for i in self.itens if i["situacao"] == "Novo")
         self.resumo.setText(f"{len(self.itens)} linha(s) no arquivo · {novos} nova(s) marcada(s)")
@@ -125,9 +133,11 @@ class ImportarPage(Pagina):
         escolhidos = []
         for linha, it in enumerate(self.itens):
             if self.tabela.item(linha, 0).checkState() == Qt.CheckState.Checked:
-                cat = self.tabela.cellWidget(linha, 4).currentText()
+                cat = self.tabela.cellWidget(linha, 6).currentText()
+                pessoa = self.tabela.cellWidget(linha, 5).text().strip()
                 escolhidos.append({"data": it["data"], "descricao": it["descricao"],
-                                   "valor": it["valor"], "categoria_id": id_categoria(cat)})
+                                   "parcelas": it["parcelas"], "valor": it["valor"],
+                                   "pessoa": pessoa or ".", "categoria_id": id_categoria(cat)})
         return escolhidos
 
     def importar(self):

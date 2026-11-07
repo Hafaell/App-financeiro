@@ -152,7 +152,8 @@ class Financas:
                 self.lancamentos.adicionar("despesas", it["descricao"], it["valor"], m,
                                            categoria_id=it.get("categoria_id"))
             else:
-                self.compras.lancar(destino, it["descricao"][:80], it["valor"], "1/1", mes=m,
+                self.compras.lancar(destino, it["descricao"][:80], it["valor"], it.get("parcelas") or "1/1",
+                                    mes=m, pessoa=it.get("pessoa") or ".",
                                     categoria_id=it.get("categoria_id"))
             feitos += 1
         return feitos
