@@ -23,10 +23,10 @@ class Compras:
         return linhas[0] if linhas else None
 
     def lancar(self, cartao, item, valor_parcela, parcelas="1/1", mes=None,
-               pessoa=".", valor_real=None, recorrente=False, categoria_id=None) -> int:
+               pessoa=".", recorrente=False, categoria_id=None) -> int:
         m = self.meses.interpretar(mes)
         self.meses.exigir(m)
-        dados = self._validar(cartao, item, parcelas, valor_parcela, pessoa, valor_real,
+        dados = self._validar(cartao, item, parcelas, valor_parcela, pessoa,
                               recorrente, categoria_id)
         id_, _ = self.banco.gravar(
             "INSERT INTO compras (mes, cartao, item, parcelas, valor_parcela, emprestimo, "
@@ -34,8 +34,8 @@ class Compras:
         return id_
 
     def atualizar(self, id_, cartao, item, parcelas, valor_parcela, pessoa=".",
-                  valor_real=None, recorrente=False, categoria_id=None) -> bool:
-        dados = self._validar(cartao, item, parcelas, valor_parcela, pessoa, valor_real,
+                  recorrente=False, categoria_id=None) -> bool:
+        dados = self._validar(cartao, item, parcelas, valor_parcela, pessoa,
                               recorrente, categoria_id)
         _, n = self.banco.gravar(
             "UPDATE compras SET cartao = ?, item = ?, parcelas = ?, valor_parcela = ?, "
@@ -49,7 +49,7 @@ class Compras:
         _, n = self.banco.gravar("DELETE FROM compras WHERE id = ?", (int(id_),))
         return n > 0
 
-    def _validar(self, cartao, item, parcelas, valor_parcela, pessoa, valor_real, recorrente,
+    def _validar(self, cartao, item, parcelas, valor_parcela, pessoa, recorrente,
                  categoria_id=None):
         """Confere os campos e devolve a tupla na ordem das colunas (sem mês e id)."""
         cartao = self.cartoes.canonico(cartao)
@@ -65,7 +65,9 @@ class Compras:
         pessoa = str(pessoa or "").strip() or "."
         if isinstance(recorrente, str):
             recorrente = recorrente.strip().lower() in ("1", "sim", "s", "true", "yes")
-        real = None if valor_real in (None, "") else dinheiro(valor_real)
         emprestimo = 1 if pessoa != "." else 0
+        # Regra interna (não aparece na tela): o valor real é o que você paga.
+        # Empréstimo (outra pessoa paga) fica 0.
+        real = 0.0 if emprestimo else valor
         cat = int(categoria_id) if categoria_id not in (None, "") else None
         return cartao, item, parcelas, valor, emprestimo, pessoa, real, int(bool(recorrente)), cat

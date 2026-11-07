@@ -14,11 +14,15 @@ def _percentual(valor):
 class CaixinhasPage(Pagina):
     COLUNAS = ["Dono", "Caixinha", "Valor", "Meta", "Progresso", "Data alvo", "Por mês"]
 
-    def __init__(self, janela):
+    def __init__(self, janela, titulo=None):
         super().__init__(janela)
         lay = QVBoxLayout(self)
         lay.setSpacing(14)
         barra = QHBoxLayout()
+        if titulo:
+            rotulo = QLabel(titulo)
+            rotulo.setObjectName("secao")
+            barra.addWidget(rotulo)
         barra.addStretch()
         botao = QPushButton("Nova caixinha")
         botao.setObjectName("primario")

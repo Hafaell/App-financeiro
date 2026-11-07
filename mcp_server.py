@@ -100,7 +100,7 @@ def listar_compras(cartao: str = "", mes: str = "") -> list[dict]:
 @mcp.tool()
 def lancar_compra(cartao: str, item: str, valor_parcela: str,
                   parcelas: str = "", mes: str = "", pessoa: str = ".",
-                  valor_real: str = "", recorrente: bool = False, categoria: str = "") -> dict:
+                  recorrente: bool = False, categoria: str = "") -> dict:
     """Lança uma compra no cartão.
     cartao: nome de um cartão cadastrado (use listar_cartoes). valor_parcela: ex. 'R$ 63,19'.
     parcelas: ex. '3/12'. Vazio = à vista.
@@ -108,9 +108,9 @@ def lancar_compra(cartao: str, item: str, valor_parcela: str,
     empréstimo dessa pessoa. Vazio ou '.' = compra sua.
     recorrente=True quando o item continua no mês seguinte depois da virada.
     categoria: nome de uma categoria cadastrada (use listar_categorias). Vazio = sem categoria.
-    valor_real é opcional. O mês precisa estar aberto."""
+    O mês precisa estar aberto."""
     id_ = fin().lancar_compra(cartao, item, valor_parcela, parcelas=parcelas or "1/1",
-                             mes=mes or None, pessoa=pessoa, valor_real=valor_real or None,
+                             mes=mes or None, pessoa=pessoa,
                              recorrente=recorrente, categoria_id=_id_da_categoria(categoria))
     return {"ok": True, "id": id_}
 

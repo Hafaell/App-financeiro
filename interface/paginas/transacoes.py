@@ -16,7 +16,7 @@ class CartoesPage(Pagina):
     """Transações: compras de todos os cartões, com cadastro de cartões novos."""
 
     COLUNAS = ["Cartão", "Item", "Categoria", "Parcelas", "Valor da parcela",
-               "Recorrente", "Pessoa", "Valor real"]
+               "Recorrente", "Pessoa"]
 
     def __init__(self, janela):
         super().__init__(janela)
@@ -94,7 +94,6 @@ class CartoesPage(Pagina):
             (c["id"], [
                 c["cartao"], c["item"], nome_categoria(c["categoria_id"], mapa), _parcela_exibida(c), brl(c["valor_parcela"]),
                 "Sim" if c["recorrente"] else "Não", _pessoa_exibida(c),
-                brl(c["valor_real"]) if c["valor_real"] is not None else "—",
             ]) for c in linhas], cartao_col=0)
         self._aplicar_busca()
         r = fin().resumo_mes(self.mes())
@@ -125,7 +124,7 @@ class CartoesPage(Pagina):
             fin().lancar_compra(
                 cartao=v["cartao"], item=v["item"], parcelas=v["parcelas"],
                 valor_parcela=v["valor_parcela"], mes=self.mes(),
-                pessoa=v["pessoa"], valor_real=v["valor_real"] or None,
+                pessoa=v["pessoa"],
                 recorrente=v["recorrente"], categoria_id=id_categoria(v["categoria"]))
         except ValueError as e:
             self.erro(e)

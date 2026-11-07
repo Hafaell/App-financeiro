@@ -1,6 +1,6 @@
-"""Login local. Nomes, senhas e a sessão ficam criptografados nos arquivos.
-
-Só se descriptografa dentro do código, no momento de conferir um login.
+"""Login. Com Supabase, os usuários ficam na nuvem (qualquer computador enxerga os mesmos).
+Sem Supabase (modo local de testes), ficam criptografados em arquivo.
+A sessão (só o nome do usuário logado) fica criptografada neste computador.
 """
 import hashlib
 import hmac
@@ -9,7 +9,7 @@ import os
 
 from cryptography.fernet import Fernet
 
-from .config import CHAVE_PATH, PASTA, SESSAO_PATH, USUARIO_INICIAL, USUARIOS_PATH
+from .config import CHAVE_PATH, PASTA, SESSAO_PATH, TIPO_BANCO, USUARIO_INICIAL, USUARIOS_PATH
 
 
 def _hash_senha(senha: str, salt_hex: str) -> str:
@@ -36,12 +36,31 @@ class Cofre:
 class Autenticacao:
     """Cadastro de usuários, conferência de login e sessão atual."""
 
-    def __init__(self, cofre: Cofre = None):
+    def __init__(self, cofre: Cofre = None, repositorio=None):
         self.cofre = cofre or Cofre()
-        self._preparar()
+        self._nuvem = repositorio if repositorio is not None else _repositorio_padrao()
+        self._pronto = False
+        if self._nuvem is None:
+            self._preparar_local()
+            self._pronto = True
+        else:
+            from .usuarios_nuvem import ErroConexaoNuvem  # import tardio: evita ciclo com banco.py
+            try:
+                self._preparar_nuvem()
+                self._pronto = True
+            except ErroConexaoNuvem:
+                pass  # sem internet: tenta de novo quando precisar (ex.: ao entrar)
 
-    def _preparar(self):
-        """Primeira execução: traz os usuários do formato antigo e cria o usuário inicial."""
+    def _garantir(self):
+        """Na nuvem, prepara os usuários na primeira vez que for preciso (exige internet)."""
+        if not self._pronto:
+            self._preparar_nuvem()
+            self._pronto = True
+
+    # ----- preparo -----
+
+    def _preparar_local(self):
+        """Modo local: traz os usuários do formato antigo e cria o usuário inicial."""
         antigo = PASTA / "usuarios.json"
         if antigo.exists() and not USUARIOS_PATH.exists():
             dados = json.loads(antigo.read_text(encoding="utf-8"))
@@ -50,7 +69,22 @@ class Autenticacao:
             antigo.unlink()  # não deixa cópia em texto puro
         (PASTA / "sessao.json").unlink(missing_ok=True)  # sessão antiga, em texto puro
         if not USUARIOS_PATH.exists():
-            self.cadastrar_usuario(*USUARIO_INICIAL)
+            self._novo_usuario_local(*USUARIO_INICIAL)
+
+    def _preparar_nuvem(self):
+        """Supabase: cria a tabela, envia os usuários que estavam neste computador e
+        cria o usuário inicial se a tabela estiver vazia."""
+        self._nuvem.preparar()
+        if USUARIOS_PATH.exists():
+            for u in self._ler_usuarios():
+                if not self._nuvem.buscar(u["nome"]):
+                    self._nuvem.inserir(u["nome"], u["salt"], u["hash"])
+            USUARIOS_PATH.unlink()  # senhas saem deste computador: ficam só no Supabase
+        (PASTA / "sessao.json").unlink(missing_ok=True)
+        if not self._nuvem.listar():
+            self._novo_usuario(*USUARIO_INICIAL)
+
+    # ----- leitura dos usuários (nuvem ou arquivo local) -----
 
     def _ler_usuarios(self):
         if not USUARIOS_PATH.exists():
@@ -62,17 +96,36 @@ class Autenticacao:
         USUARIOS_PATH.write_bytes(self.cofre.cifrar(lista))
 
     def _achar(self, nome):
+        if self._nuvem is not None:
+            return self._nuvem.buscar(nome)
         alvo = str(nome or "").strip().lower()
         return next((u for u in self._ler_usuarios() if u["nome"].lower() == alvo), None)
 
     def listar_usuarios(self):
+        self._garantir()
+        if self._nuvem is not None:
+            return sorted(u["nome"] for u in self._nuvem.listar())
         return sorted(u["nome"] for u in self._ler_usuarios())
 
     def nome_usuario(self, nome):
+        self._garantir()
         usuario = self._achar(nome)
         return usuario["nome"] if usuario else None
 
+    # ----- cadastro -----
+
     def cadastrar_usuario(self, nome, senha):
+        self._garantir()
+        self._novo_usuario(nome, senha)
+
+    def _novo_usuario(self, nome, senha):
+        nome = str(nome or "").strip()
+        if not nome or not senha:
+            raise ValueError("Informe usuário e senha.")
+        salt = os.urandom(16).hex()
+        self._nuvem.inserir(nome, salt, _hash_senha(senha, salt))
+
+    def _novo_usuario_local(self, nome, senha):
         nome = str(nome or "").strip()
         if not nome or not senha:
             raise ValueError("Informe usuário e senha.")
@@ -84,11 +137,12 @@ class Autenticacao:
         self._gravar_usuarios(lista)
 
     def verificar_login(self, nome, senha) -> bool:
+        self._garantir()
         usuario = self._achar(nome)
         return bool(usuario) and hmac.compare_digest(
             _hash_senha(senha or "", usuario["salt"]), usuario["hash"])
 
-    # ----- sessão -----
+    # ----- sessão (só o nome de quem está logado, criptografado neste computador) -----
 
     def definir_sessao(self, nome):
         real = self.nome_usuario(nome)
@@ -106,3 +160,12 @@ class Autenticacao:
 
     def _gravar_sessao(self, usuario):
         SESSAO_PATH.write_bytes(self.cofre.cifrar({"usuario": usuario}))
+
+
+def _repositorio_padrao():
+    """Supabase quando o app está configurado para ele; None no modo local."""
+    if TIPO_BANCO != "postgres":
+        return None
+    from .usuarios_nuvem import RepositorioNuvem
+    return RepositorioNuvem()
+

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 from financas.contexto import auth, fin
+from financas.usuarios_nuvem import ErroConexaoNuvem
 from .componentes import Formulario, combo, nova_tabela, preencher, selecionado, texto
 from .formatacao import categorias_opcoes, id_categoria, nome_categoria, SEM_CATEGORIA, _parcela_exibida, _pessoa_exibida, brl, nomes_cartoes
 from .tema import VERMELHO_TEXTO
@@ -28,8 +29,6 @@ def campos_compra(c=None):
          texto(brl(c["valor_parcela"]) if c else "", "R$ 0,00")),
         ("pessoa", "Pessoa (preencha só se for empréstimo)",
          texto(_pessoa_exibida(c) if c else "", "Ex.: Pai, Avô, Benzinho")),
-        ("valor_real", "Valor real",
-         texto(brl(c["valor_real"]) if c and c["valor_real"] is not None else "", "Opcional")),
         ("recorrente", "", recorrente),
     ]
 
@@ -43,7 +42,6 @@ def dialogo_compra(pai, c):
     try:
         fin().atualizar_compra(c["id"], v["cartao"], v["item"], v["parcelas"],
                               v["valor_parcela"], pessoa=v["pessoa"],
-                              valor_real=v["valor_real"] or None,
                               recorrente=v["recorrente"], categoria_id=id_categoria(v["categoria"]))
     except ValueError as e:
         QMessageBox.warning(pai, "Não consegui salvar", str(e))
@@ -217,7 +215,11 @@ class Login(QDialog):
 
     def _entrar(self):
         nome = self.usuario.text().strip()
-        if auth().verificar_login(nome, self.senha.text()):
+        try:
+            confere = auth().verificar_login(nome, self.senha.text())
+        except ErroConexaoNuvem as e:
+            return self._erro(str(e))
+        if confere:
             self.usuario_conectado = auth().nome_usuario(nome)
             self.accept()
         else:
@@ -235,7 +237,7 @@ class Login(QDialog):
             return self._erro("As senhas não são iguais.")
         try:
             auth().cadastrar_usuario(nome, senha)
-        except ValueError as e:
+        except (ValueError, ErroConexaoNuvem) as e:
             return self._erro(str(e))
         self.usuario_conectado = auth().nome_usuario(nome)
         self.accept()

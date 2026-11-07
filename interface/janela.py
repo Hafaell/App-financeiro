@@ -166,8 +166,11 @@ class Janela(QMainWindow):
         ativo = fin().mes_ativo()
         novo = fin().proximo_mes(ativo)
         pergunta = (f"Abrir {fin().nome_mes(novo)} copiando {fin().nome_mes(ativo)}?\n\n"
-                    "As parcelas avançam uma vez, as que chegaram ao fim saem e as compras "
-                    "à vista saem (a smartfit fica). Essa ação não pode ser desfeita.")
+                    "O que acontece:\n"
+                    "• Itens marcados como Recorrente continuam no mês novo, sem avançar parcela.\n"
+                    "• Parcelas avançam uma vez; as que chegaram ao fim saem.\n"
+                    "• Compras à vista e despesas não recorrentes saem.\n\n"
+                    "Essa ação não pode ser desfeita.")
         if QMessageBox.question(self, "Virar o mês", pergunta) != QMessageBox.Yes:
             return
         try:
