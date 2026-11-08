@@ -19,5 +19,5 @@ CATEGORIAS_INICIAIS = (("Alimentação", "#F59E0B"), ("Transporte", "#3B82F6"),
 # Banco de dados: SQLite local (padrão) ou Supabase/PostgreSQL.
 # A conexão do Supabase fica criptografada em conexao.dat (gerada por supabase/configurar_conexao.py).
 CONEXAO_PATH = PASTA / "conexao.dat"
-TIPO_BANCO = os.environ.get("FINANCAS_BANCO") or ("postgres" if CONEXAO_PATH.exists() else "sqlite")
+TIPO_BANCO = os.environ.get("FINANCAS_BANCO") or "postgres"  # o app usa o Supabase; "sqlite" só em testes
 DATABASE_URL = os.environ.get("DATABASE_URL")  # opcional: sobrescreve a conexão guardada

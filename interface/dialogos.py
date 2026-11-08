@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 from financas.contexto import auth, fin
-from financas.usuarios_nuvem import ErroConexaoNuvem
+from financas.nuvem import ErroConexao
 from .componentes import Formulario, combo, nova_tabela, preencher, selecionado, texto
 from .formatacao import categorias_opcoes, id_categoria, nome_categoria, SEM_CATEGORIA, _parcela_exibida, _pessoa_exibida, brl, nomes_cartoes
 from .tema import VERMELHO_TEXTO
@@ -122,7 +122,8 @@ class Login(QDialog):
         self.setWindowTitle("Controle Financeiro")
         self.setMinimumWidth(400)
         self.usuario_conectado = None
-        self.modo_criar = not auth().listar_usuarios()
+        self.modo_criar = (not auth().nuvem) and not auth().listar_usuarios()
+        self._cadastro_pendente = False
         self._pede_contas = contas is not None
 
         lay = QVBoxLayout(self)
@@ -133,7 +134,7 @@ class Login(QDialog):
         self.subtitulo = QLabel()
         self.subtitulo.setObjectName("rotulo")
         self.subtitulo.setWordWrap(True)
-        self.usuario = texto(usuario_inicial, "Usuário")
+        self.usuario = texto(usuario_inicial, "E-mail" if auth().nuvem else "Usuário")
         self.senha = texto("", "Senha")
         self.senha.setEchoMode(QLineEdit.EchoMode.Password)
         self.rot_confirma = QLabel("Repita a senha")
@@ -164,7 +165,7 @@ class Login(QDialog):
         self.sem_contas.setObjectName("rotulo")
         lay.addWidget(self.sem_contas)
         self._contas = list(contas or [])
-        lay.addWidget(QLabel("Usuário"))
+        lay.addWidget(QLabel("E-mail" if auth().nuvem else "Usuário"))
         lay.addWidget(self.usuario)
         lay.addWidget(QLabel("Senha"))
         lay.addWidget(self.senha)
@@ -180,9 +181,14 @@ class Login(QDialog):
     def _mostrar_modo(self):
         criar = self.modo_criar
         self.titulo.setText("Criar conta" if criar else "Entrar")
-        self.subtitulo.setText(
-            "Crie um usuário e uma senha. Cada conta tem os seus próprios dados."
-            if criar else "Digite seu usuário e senha.")
+        if auth().nuvem:
+            self.subtitulo.setText(
+                "Use seu e-mail. Só e-mails autorizados podem criar conta." if criar
+                else "Digite seu e-mail e senha.")
+        else:
+            self.subtitulo.setText(
+                "Crie um usuário e uma senha. Cada conta tem os seus próprios dados."
+                if criar else "Digite seu usuário e senha.")
         mostrar_contas = not criar and bool(self._contas)
         self.rot_contas.setVisible(mostrar_contas)
         for i in range(self.botoes_contas.count()):
@@ -193,10 +199,12 @@ class Login(QDialog):
         self.principal.setText("Criar conta e entrar" if criar else "Entrar")
         self.alternar.setText("Entrar" if criar else "Criar conta")
         # Sem nenhum usuário cadastrado, só dá para criar conta
-        self.alternar.setVisible(bool(auth().listar_usuarios()))
+        self.alternar.setVisible(auth().nuvem or bool(auth().listar_usuarios()))
         self.erro.setText("")
         self.senha.clear()
         self.confirma.clear()
+        if auth().nuvem:
+            self.rot_contas.setVisible(False)
 
     def _escolher_conta(self, nome):
         self.usuario.setText(nome)
@@ -216,36 +224,111 @@ class Login(QDialog):
     def _entrar(self):
         nome = self.usuario.text().strip()
         try:
-            confere = auth().verificar_login(nome, self.senha.text())
-        except ErroConexaoNuvem as e:
+            entrou = auth().entrar(nome, self.senha.text())
+        except ErroConexao as e:
             return self._erro(str(e))
-        if confere:
-            self.usuario_conectado = auth().nome_usuario(nome)
+        if entrou:
+            self.usuario_conectado = entrou
             self.accept()
         else:
             self.senha.clear()
-            self._erro("Usuário ou senha incorretos.")
+            self._erro("E-mail ou senha incorretos." if auth().nuvem else "Usuário ou senha incorretos.")
 
     def _criar(self):
         nome = self.usuario.text().strip()
         senha = self.senha.text()
         if not nome:
-            return self._erro("Informe o nome do usuário.")
+            return self._erro("Informe o e-mail." if auth().nuvem else "Informe o nome do usuário.")
         if not senha:
             return self._erro("Informe uma senha.")
+        if len(senha) < 6:
+            return self._erro("A senha precisa ter pelo menos 6 caracteres.")
         if senha != self.confirma.text():
             return self._erro("As senhas não são iguais.")
+        if auth().nuvem:
+            try:
+                ja_entrou = auth().cadastrar(nome, senha)
+            except (ValueError, ErroConexao) as e:
+                return self._erro(str(e))
+            if ja_entrou:
+                self.usuario_conectado = nome
+                return self.accept()
+            # confirmação de e-mail ligada: volta para a tela de entrar
+            self.modo_criar = False
+            self._mostrar_modo()
+            self.usuario.setText(nome)
+            self.erro.setStyleSheet("color: #15803D;")
+            self.erro.setText("Conta criada. Enviamos um e-mail para você confirmar. "
+                              "Depois, entre com seu e-mail e senha.")
+            return
         try:
             auth().cadastrar_usuario(nome, senha)
-        except (ValueError, ErroConexaoNuvem) as e:
+            self.usuario_conectado = auth().entrar(nome, senha)
+        except (ValueError, ErroConexao) as e:
             return self._erro(str(e))
-        self.usuario_conectado = auth().nome_usuario(nome)
         self.accept()
 
     def _erro(self, mensagem):
         self.erro.setText(mensagem)
         self.erro.setStyleSheet(f"color: {VERMELHO_TEXTO};")
         self.senha.setFocus()
+
+
+class ConfigurarConexao(QDialog):
+    """Primeira abertura em um computador: guarda a URL do projeto e a chave pública do Supabase."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Controle Financeiro")
+        self.setMinimumWidth(460)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(32, 28, 32, 28)
+        lay.setSpacing(10)
+        titulo = QLabel("Conectar ao Supabase")
+        titulo.setObjectName("secao")
+        ajuda = QLabel(
+            "Esses dois dados ficam no painel do Supabase, em Project Settings > Data API (URL) "
+            "e Project Settings > API Keys (chave pública, a que começa com sb_publishable_). "
+            "Não use a chave secreta (sb_secret_).")
+        ajuda.setObjectName("rotulo")
+        ajuda.setWordWrap(True)
+        self.url = texto("", "https://xxxxxxxx.supabase.co")
+        self.chave = texto("", "sb_publishable_...")
+        self.erro = QLabel("")
+        self.erro.setWordWrap(True)
+        self.salvar = QPushButton("Salvar e continuar")
+        self.salvar.setObjectName("primario")
+        self.salvar.setDefault(True)
+        self.salvar.clicked.connect(self._salvar)
+        lay.addWidget(titulo)
+        lay.addWidget(ajuda)
+        lay.addWidget(QLabel("URL do projeto"))
+        lay.addWidget(self.url)
+        lay.addWidget(QLabel("Chave pública"))
+        lay.addWidget(self.chave)
+        lay.addWidget(self.erro)
+        lay.addWidget(self.salvar)
+
+    def _salvar(self):
+        from financas.config import CONEXAO_PATH
+        from financas.seguranca import Cofre
+        url = self.url.text().strip().rstrip("/")
+        if url.endswith("/rest/v1"):  # o app já adiciona esse caminho sozinho
+            url = url[: -len("/rest/v1")]
+        chave = self.chave.text().strip()
+        if not url.startswith("https://") or not url.endswith(".supabase.co"):
+            return self._erro("A URL precisa ser como https://xxxxxxxx.supabase.co")
+        if not chave:
+            return self._erro("Informe a chave pública.")
+        if chave.startswith("sb_secret") or "service_role" in chave:
+            return self._erro("Essa é a chave secreta. Use a chave pública (sb_publishable_).")
+        CONEXAO_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CONEXAO_PATH.write_bytes(Cofre().cifrar({"url": url, "chave": chave}))
+        self.accept()
+
+    def _erro(self, mensagem):
+        self.erro.setText(mensagem)
+        self.erro.setStyleSheet(f"color: {VERMELHO_TEXTO};")
 
 
 class GerenciarMeses(QDialog):

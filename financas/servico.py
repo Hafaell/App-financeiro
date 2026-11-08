@@ -37,8 +37,8 @@ class Financas:
         self.virada = Virada(banco, self.meses)
 
     @classmethod
-    def do_usuario(cls, usuario: str) -> "Financas":
-        return cls(criar_banco(usuario))
+    def do_usuario(cls, usuario: str, cliente=None) -> "Financas":
+        return cls(criar_banco(usuario, cliente))
 
     def versao(self) -> int:
         return self.banco.versao()

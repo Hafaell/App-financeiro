@@ -119,20 +119,26 @@ class Janela(QMainWindow):
 
     def trocar_usuario(self):
         atual = auth().usuario_logado()
-        outras = [u for u in auth().listar_usuarios() if u != atual]
-        login = Login("", contas=outras)
-        if login.exec() != QDialog.Accepted:
-            return
-        auth().definir_sessao(login.usuario_conectado)
+        if auth().nuvem:
+            auth().sair()
+            login = Login("")
+            if login.exec() != QDialog.Accepted:
+                QApplication.quit()
+                return
+        else:
+            outras = [u for u in auth().listar_usuarios() if u != atual]
+            login = Login("", contas=outras)
+            if login.exec() != QDialog.Accepted:
+                return
         self._mudou_usuario()
 
     def sair(self):
         if QMessageBox.question(
                 self, "Sair",
-                "Sair do Controle Financeiro? Na próxima vez, o app vai pedir usuário e senha.",
+                "Sair do Controle Financeiro? Na próxima vez, o app vai pedir e-mail e senha.",
         ) != QMessageBox.Yes:
             return
-        auth().encerrar_sessao()
+        auth().sair()
         QApplication.quit()
 
     def _mudou_usuario(self):

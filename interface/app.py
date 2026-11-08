@@ -5,8 +5,9 @@ from PySide6.QtWidgets import QApplication, QDialog
 from PySide6.QtWidgets import QMessageBox
 
 from financas.contexto import auth
-from financas.usuarios_nuvem import ErroConexaoNuvem
-from .dialogos import Login
+from financas.nuvem import ErroConexao
+from financas.config import CONEXAO_PATH, TIPO_BANCO
+from .dialogos import ConfigurarConexao, Login
 from .janela import Janela
 from .tema import TEMA
 
@@ -15,13 +16,15 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setStyleSheet(TEMA)
+    if TIPO_BANCO == "postgres" and not CONEXAO_PATH.exists():
+        if ConfigurarConexao().exec() != QDialog.Accepted:
+            sys.exit(0)
     try:
         if not auth().usuario_logado():
             login = Login("")
             if login.exec() != QDialog.Accepted:
                 sys.exit(0)
-            auth().definir_sessao(login.usuario_conectado)
-    except ErroConexaoNuvem as e:
+    except ErroConexao as e:
         QMessageBox.critical(None, "Controle Financeiro", str(e))
         sys.exit(1)
     janela = Janela()

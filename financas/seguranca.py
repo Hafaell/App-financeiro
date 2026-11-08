@@ -34,57 +34,40 @@ class Cofre:
 
 
 class Autenticacao:
-    """Cadastro de usuários, conferência de login e sessão atual."""
+    """Entrar no app.
 
-    def __init__(self, cofre: Cofre = None, repositorio=None):
+    Com Supabase (TIPO_BANCO postgres): login pelo Supabase Auth (e-mail e senha).
+    O token fica só na memória: nada de usuário ou senha no computador.
+    Modo local (testes): usuários criptografados em arquivo, como antes.
+    """
+
+    def __init__(self, cofre: Cofre = None):
         self.cofre = cofre or Cofre()
-        self._nuvem = repositorio if repositorio is not None else _repositorio_padrao()
-        self._pronto = False
-        if self._nuvem is None:
-            self._preparar_local()
-            self._pronto = True
+        self.nuvem = TIPO_BANCO == "postgres"
+        self.cliente = None
+        if self.nuvem:
+            import os
+            from .banco import configuracao_supabase
+            from .nuvem import ClienteSupabase
+            url, chave = configuracao_supabase()
+            prefixo = os.environ.get("SUPABASE_PREFIXO", "/rest/v1")  # vazio só nos testes locais
+            self.cliente = ClienteSupabase(url, chave, prefixo_api=prefixo,
+                                           ao_renovar=self._guardar_sessao_nuvem)
         else:
-            from .usuarios_nuvem import ErroConexaoNuvem  # import tardio: evita ciclo com banco.py
-            try:
-                self._preparar_nuvem()
-                self._pronto = True
-            except ErroConexaoNuvem:
-                pass  # sem internet: tenta de novo quando precisar (ex.: ao entrar)
+            self._preparar_local()
 
-    def _garantir(self):
-        """Na nuvem, prepara os usuários na primeira vez que for preciso (exige internet)."""
-        if not self._pronto:
-            self._preparar_nuvem()
-            self._pronto = True
-
-    # ----- preparo -----
+    # ----- modo local (testes) -----
 
     def _preparar_local(self):
-        """Modo local: traz os usuários do formato antigo e cria o usuário inicial."""
         antigo = PASTA / "usuarios.json"
         if antigo.exists() and not USUARIOS_PATH.exists():
             dados = json.loads(antigo.read_text(encoding="utf-8"))
             self._gravar_usuarios([{"nome": n, "salt": d["salt"], "hash": d["hash"]}
                                    for n, d in dados.items()])
             antigo.unlink()  # não deixa cópia em texto puro
-        (PASTA / "sessao.json").unlink(missing_ok=True)  # sessão antiga, em texto puro
+        (PASTA / "sessao.json").unlink(missing_ok=True)
         if not USUARIOS_PATH.exists():
             self._novo_usuario_local(*USUARIO_INICIAL)
-
-    def _preparar_nuvem(self):
-        """Supabase: cria a tabela, envia os usuários que estavam neste computador e
-        cria o usuário inicial se a tabela estiver vazia."""
-        self._nuvem.preparar()
-        if USUARIOS_PATH.exists():
-            for u in self._ler_usuarios():
-                if not self._nuvem.buscar(u["nome"]):
-                    self._nuvem.inserir(u["nome"], u["salt"], u["hash"])
-            USUARIOS_PATH.unlink()  # senhas saem deste computador: ficam só no Supabase
-        (PASTA / "sessao.json").unlink(missing_ok=True)
-        if not self._nuvem.listar():
-            self._novo_usuario(*USUARIO_INICIAL)
-
-    # ----- leitura dos usuários (nuvem ou arquivo local) -----
 
     def _ler_usuarios(self):
         if not USUARIOS_PATH.exists():
@@ -95,77 +78,115 @@ class Autenticacao:
         USUARIOS_PATH.parent.mkdir(parents=True, exist_ok=True)
         USUARIOS_PATH.write_bytes(self.cofre.cifrar(lista))
 
-    def _achar(self, nome):
-        if self._nuvem is not None:
-            return self._nuvem.buscar(nome)
+    def _achar_local(self, nome):
         alvo = str(nome or "").strip().lower()
         return next((u for u in self._ler_usuarios() if u["nome"].lower() == alvo), None)
-
-    def listar_usuarios(self):
-        self._garantir()
-        if self._nuvem is not None:
-            return sorted(u["nome"] for u in self._nuvem.listar())
-        return sorted(u["nome"] for u in self._ler_usuarios())
-
-    def nome_usuario(self, nome):
-        self._garantir()
-        usuario = self._achar(nome)
-        return usuario["nome"] if usuario else None
-
-    # ----- cadastro -----
-
-    def cadastrar_usuario(self, nome, senha):
-        self._garantir()
-        self._novo_usuario(nome, senha)
-
-    def _novo_usuario(self, nome, senha):
-        nome = str(nome or "").strip()
-        if not nome or not senha:
-            raise ValueError("Informe usuário e senha.")
-        salt = os.urandom(16).hex()
-        self._nuvem.inserir(nome, salt, _hash_senha(senha, salt))
 
     def _novo_usuario_local(self, nome, senha):
         nome = str(nome or "").strip()
         if not nome or not senha:
             raise ValueError("Informe usuário e senha.")
-        if self._achar(nome):
+        if self._achar_local(nome):
             raise ValueError(f"O usuário {nome} já existe.")
         salt = os.urandom(16).hex()
         lista = self._ler_usuarios()
         lista.append({"nome": nome, "salt": salt, "hash": _hash_senha(senha, salt)})
         self._gravar_usuarios(lista)
 
-    def verificar_login(self, nome, senha) -> bool:
-        self._garantir()
-        usuario = self._achar(nome)
-        return bool(usuario) and hmac.compare_digest(
-            _hash_senha(senha or "", usuario["salt"]), usuario["hash"])
+    def cadastrar(self, email, senha) -> bool:
+        """Com Supabase: cria a conta. True = já entrou; False = confirme o e-mail antes."""
+        if not self.nuvem:
+            raise ValueError("Cadastro pelo app só existe com o Supabase.")
+        from .nuvem import ErroBanco
+        try:
+            return self.cliente.cadastrar(email.strip(), senha)
+        except ErroBanco as e:
+            m = str(e).lower()
+            if "already" in m or "registered" in m or "já" in m:
+                raise ValueError("Este e-mail já tem conta. Use Entrar.") from e
+            if "rate" in m or "too many" in m or "limit" in m:
+                raise ValueError("Muitas tentativas seguidas. Espere alguns minutos e tente de novo.") from e
+            if "database error" in m:
+                raise ValueError("Este e-mail não está autorizado a criar conta. "
+                                 "Peça para liberar o e-mail na lista de autorizados.") from e
+            if "password" in m:
+                raise ValueError("A senha não atende às regras do Supabase. Use pelo menos 6 caracteres.") from e
+            if "invalid" in m and "email" in m:
+                raise ValueError("E-mail inválido. Confira o endereço digitado.") from e
+            raise ValueError(f"Não foi possível criar a conta: {e}") from e
 
-    # ----- sessão (só o nome de quem está logado, criptografado neste computador) -----
+    def cadastrar_usuario(self, nome, senha):
+        """Só no modo local. Com Supabase, os usuários são criados no painel do Supabase."""
+        if self.nuvem:
+            raise ValueError("Crie os usuários no painel do Supabase (Authentication > Users).")
+        self._novo_usuario_local(nome, senha)
 
-    def definir_sessao(self, nome):
-        real = self.nome_usuario(nome)
-        if not real:
-            raise ValueError("Usuário não encontrado.")
-        self._gravar_sessao(real)
+    def listar_usuarios(self):
+        if self.nuvem:
+            return []
+        return sorted(u["nome"] for u in self._ler_usuarios())
 
-    def encerrar_sessao(self):
-        self._gravar_sessao(None)
+    # ----- entrar e sair -----
+
+    def entrar(self, identificacao: str, senha: str):
+        """Confere o login. Devolve o nome de quem entrou, ou None se estiver errado.
+        Erros de conexão (sem internet) são levantados para a tela mostrar."""
+        if self.nuvem:
+            from .nuvem import SessaoExpirada
+            try:
+                self.cliente.entrar(identificacao.strip(), senha)
+            except SessaoExpirada:
+                return None
+            return self.cliente.usuario_email
+        usuario = self._achar_local(identificacao)
+        if usuario and hmac.compare_digest(_hash_senha(senha or "", usuario["salt"]), usuario["hash"]):
+            self._gravar_sessao(usuario["nome"])
+            return usuario["nome"]
+        return None
 
     def usuario_logado(self):
+        """Quem entrou nesta janela do app (a tela pede login a cada abertura)."""
+        if self.nuvem:
+            return self.cliente.usuario_email if self.cliente and self.cliente.logado else None
         if not SESSAO_PATH.exists():
             return None
         return self.cofre.decifrar(SESSAO_PATH.read_bytes()).get("usuario")
 
+    def usuario_servico(self):
+        """Para o Claude (servidor MCP): usa a sessão guardada neste computador, se houver.
+        Não pede senha; usa só o refresh token guardado de forma criptografada."""
+        if not self.nuvem:
+            return self.usuario_logado()
+        if self.cliente.logado:
+            return self.cliente.usuario_email
+        sessao = self._ler_sessao_nuvem()
+        if not sessao:
+            return None
+        from .nuvem import ErroConexao
+        try:
+            return sessao["email"] if self.cliente.restaurar(sessao["refresh"], sessao["email"]) else None
+        except ErroConexao:
+            return None
+
+    def sair(self):
+        if self.nuvem:
+            self.cliente.sair()
+            SESSAO_PATH.unlink(missing_ok=True)  # o Claude também perde o acesso
+        else:
+            self._gravar_sessao(None)
+
+    def _guardar_sessao_nuvem(self, refresh, email):
+        SESSAO_PATH.parent.mkdir(parents=True, exist_ok=True)
+        SESSAO_PATH.write_bytes(self.cofre.cifrar({"refresh": refresh, "email": email}))
+
+    def _ler_sessao_nuvem(self):
+        if not SESSAO_PATH.exists():
+            return None
+        try:
+            dados = self.cofre.decifrar(SESSAO_PATH.read_bytes())
+        except Exception:
+            return None
+        return dados if dados.get("refresh") else None
+
     def _gravar_sessao(self, usuario):
         SESSAO_PATH.write_bytes(self.cofre.cifrar({"usuario": usuario}))
-
-
-def _repositorio_padrao():
-    """Supabase quando o app está configurado para ele; None no modo local."""
-    if TIPO_BANCO != "postgres":
-        return None
-    from .usuarios_nuvem import RepositorioNuvem
-    return RepositorioNuvem()
-

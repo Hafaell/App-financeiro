@@ -19,10 +19,10 @@ def auth() -> Autenticacao:
 
 def fin() -> Financas:
     """Regras e dados do usuário conectado."""
-    usuario = auth().usuario_logado()
+    usuario = auth().usuario_servico()  # app já logado, ou sessão guardada para o Claude
     if not usuario:
         raise RuntimeError("Nenhum usuário conectado. Abra o app Controle Financeiro e faça login.")
     if _cache["usuario"] != usuario:
-        _cache["financas"] = Financas.do_usuario(usuario)
+        _cache["financas"] = Financas.do_usuario(usuario, auth().cliente)
         _cache["usuario"] = usuario
     return _cache["financas"]

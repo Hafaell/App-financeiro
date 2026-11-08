@@ -1,8 +1,9 @@
 """Acesso aos dados de um usuário.
 
 Dois bancos, com a mesma interface:
-- BancoSqlite: arquivo local (padrão).
-- BancoPostgres: Supabase (PostgreSQL). Cada usuário tem um esquema próprio, `financeiro_<usuario>`.
+- BancoSqlite: arquivo local (modo de testes).
+- BancoPostgres: Supabase, pela API (HTTP), com o login do próprio Supabase Auth.
+  Os dados de todos os usuários ficam nas mesmas tabelas; cada linha tem o dono (user_id).
 
 O restante do projeto não sabe qual dos dois está sendo usado.
 """
@@ -12,10 +13,11 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from .config import (BANCO_FORCADO, CARTOES_INICIAIS, CATEGORIAS_INICIAIS, CONEXAO_PATH, DATABASE_URL,
-                     PASTA, TIPO_BANCO)
+from .config import (BANCO_FORCADO, CARTOES_INICIAIS, CATEGORIAS_INICIAIS, CONEXAO_PATH, PASTA,
+                     TIPO_BANCO)
 from .seguranca import Cofre
 from .esquema import TABELAS_COM_ID, comandos
+from .nuvem import ClienteSupabase, ErroBanco, ErroConexao
 from .utilidades import mes_do_calendario, slug
 
 
@@ -23,11 +25,7 @@ TABELAS_SINCRONIA = ("cartoes", "categorias", "rendas", "sessoes", "compras", "r
                      "despesas", "caixinhas", "pagamentos", "meta")
 INTERVALO_VERIFICACAO = 1.0  # segundos entre verificações de mudança no Supabase
 INTERVALO_TENTATIVA = 5.0    # segundos entre tentativas de reconectar, quando offline
-try:
-    import psycopg
-    ERROS_CONEXAO = (psycopg.OperationalError,)
-except ImportError:  # psycopg só é necessário com o Supabase
-    ERROS_CONEXAO = ()
+ERROS_CONEXAO = (ErroConexao,)
 _TABELA_RE = re.compile(r"(?:INTO|UPDATE|FROM)\s+([A-Za-z_]\w*)", re.IGNORECASE)
 
 
@@ -35,16 +33,9 @@ def _tabelas_do_sql(sql):
     return set(_TABELA_RE.findall(sql)) & set(TABELAS_SINCRONIA)
 
 
-class _Adaptador:
-    """Executa dentro da transação do Supabase e anota quais tabelas foram tocadas."""
-
-    def __init__(self, con, tocadas):
-        self.con = con
-        self.tocadas = tocadas
-
-    def execute(self, sql, args=()):
-        self.tocadas |= _tabelas_do_sql(sql)
-        return self.con.execute(sql.replace("?", "%s"), args)
+def _pg(sql):
+    """O código usa ? nos comandos (estilo SQLite); o PostgreSQL usa %s."""
+    return sql.replace("?", "%s")
 
 
 class BancoSqlite:
@@ -137,19 +128,18 @@ def _sql_para_envio(op):
 
 
 class BancoPostgres:
-    """Supabase (PostgreSQL) como fonte de verdade, com cópia em memória e modo offline.
+    """Supabase pela API, com cópia em memória e modo offline.
 
     Online:  leituras vêm da cópia; alterações vão ao Supabase primeiro e depois a cópia é atualizada.
     Offline: alterações são aplicadas na cópia e anotadas numa fila criptografada.
              Quando a conexão volta, a fila é enviada na ordem e a cópia é recarregada.
+    A versão dos dados (meta.versao) é aumentada pelo próprio banco, a cada alteração.
     """
 
-    def __init__(self, url, esquema, caminho_fila, caminho_cache):
-        self.url = url
-        self.esquema = esquema
+    def __init__(self, cliente: ClienteSupabase, caminho_fila, caminho_cache):
+        self.cliente = cliente
         self.caminho_fila = Path(caminho_fila)
         self.caminho_cache = Path(caminho_cache)
-        self._pg = None
         self._local = None
         self._fila = None
         self._cofre = None
@@ -161,48 +151,15 @@ class BancoPostgres:
 
     # ----- conexão -----
 
-    def _preparar_esquema(self):
-        """Comandos de preparação, enviados de uma vez só (uma ida e volta)."""
-        def texto(valor):
-            return "'" + str(valor).replace("'", "''") + "'"
-        partes = [f'CREATE SCHEMA IF NOT EXISTS "{self.esquema}"',
-                  f'SET search_path TO "{self.esquema}"']
-        partes += comandos("postgres")
-        partes.append("INSERT INTO meta (chave, valor) VALUES ('versao', 0) ON CONFLICT DO NOTHING")
-        for nome, cor, cor_texto in CARTOES_INICIAIS:
-            partes.append("INSERT INTO cartoes (nome, cor, cor_texto) VALUES "
-                          f"({texto(nome)}, {texto(cor)}, {texto(cor_texto)}) ON CONFLICT DO NOTHING")
-        partes += ["ALTER TABLE compras ADD COLUMN IF NOT EXISTS categoria_id BIGINT",
-                   "ALTER TABLE despesas ADD COLUMN IF NOT EXISTS categoria_id BIGINT",
-                   "ALTER TABLE caixinhas ADD COLUMN IF NOT EXISTS meta DOUBLE PRECISION",
-                   "ALTER TABLE caixinhas ADD COLUMN IF NOT EXISTS data_alvo TEXT",
-                   "ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS dia_fechamento BIGINT",
-                   "ALTER TABLE cartoes ADD COLUMN IF NOT EXISTS dia_vencimento BIGINT"]
-        for nome, cor in CATEGORIAS_INICIAIS:
-            partes.append("INSERT INTO categorias (nome, cor, orcamento) VALUES "
-                          f"({texto(nome)}, {texto(cor)}, 0) ON CONFLICT (nome) DO NOTHING")
-        partes.append(f"INSERT INTO sessoes (mes) VALUES ({texto(mes_do_calendario())}) "
-                      "ON CONFLICT DO NOTHING")
-        return ";\n".join(partes) + ";"
-
-    def _pg_conexao(self):
-        import psycopg
-        from psycopg.rows import dict_row
-        if self._pg is None or self._pg.closed:
-            con = psycopg.connect(self.url, row_factory=dict_row, autocommit=True, connect_timeout=5)
-            con.execute(self._preparar_esquema())
-            self._pg = con
-        return self._pg
+    def _preparar_nuvem(self):
+        """Primeiro acesso do usuário (cartões e categorias padrão) e mês atual aberto."""
+        self.cliente.preparar()
+        self.cliente.executar("INSERT INTO sessoes (mes) VALUES (%s) ON CONFLICT DO NOTHING",
+                              [mes_do_calendario()])
 
     def _cair_offline(self):
         self._online = False
         self._ultima_tentativa = time.time()
-        if self._pg is not None:
-            try:
-                self._pg.close()
-            except Exception:
-                pass
-        self._pg = None
 
     def _tentar_reconectar(self):
         """Quando offline, tenta voltar no máximo a cada INTERVALO_TENTATIVA segundos."""
@@ -211,7 +168,7 @@ class BancoPostgres:
             return False
         self._ultima_tentativa = agora
         try:
-            self._pg_conexao()
+            self._preparar_nuvem()
         except ERROS_CONEXAO:
             return False
         self._online = True
@@ -231,7 +188,7 @@ class BancoPostgres:
             local.execute("INSERT OR IGNORE INTO meta (chave, valor) VALUES ('versao', 0)")
             self._local = local
             try:
-                self._pg_conexao()
+                self._preparar_nuvem()
                 self._online = True
                 if self._fila_lista():
                     self._enviar_fila()
@@ -273,16 +230,15 @@ class BancoPostgres:
 
     def _sincronizar(self, tabelas=TABELAS_SINCRONIA):
         """Copia as tabelas do Supabase para a memória. Só funciona online."""
-        pg = self._pg_conexao()
         local = self._copia()
         for tabela in tabelas:
-            linhas = pg.execute(f"SELECT * FROM {tabela}").fetchall()
+            linhas = self.cliente.executar(f"SELECT * FROM {tabela}")["linhas"]
             colunas = [r[1] for r in local.execute(f"PRAGMA table_info({tabela})")]
             local.execute(f"DELETE FROM {tabela}")
             if linhas:
                 marcas = ",".join("?" * len(colunas))
                 local.executemany(f"INSERT INTO {tabela} ({','.join(colunas)}) VALUES ({marcas})",
-                                  [tuple(l[c] for c in colunas) for l in linhas])
+                                  [tuple(l.get(c) for c in colunas) for l in linhas])
         local.commit()
         self._salvar_cache()
 
@@ -303,18 +259,15 @@ class BancoPostgres:
     def _enviar_fila(self):
         """Envia as alterações pendentes ao Supabase, na ordem em que foram feitas."""
         fila = self._fila_lista()
-        pg = self._pg_conexao()
         while fila:
             op = fila[0]
             sql, args = _sql_para_envio(op)
             try:
-                with pg.transaction():
-                    pg.execute(sql, args)
-                    pg.execute("UPDATE meta SET valor = valor + 1 WHERE chave = 'versao'")
+                self.cliente.executar(_pg(sql), args)  # a versão é aumentada pelo banco
             except ERROS_CONEXAO:
                 self._fila_salvar()
                 raise
-            except Exception:  # o Supabase recusou esta alteração: descarta e conta
+            except ErroBanco:  # o Supabase recusou esta alteração: descarta e conta
                 self.falhas += 1
             fila.pop(0)
             self._fila_salvar()
@@ -334,9 +287,11 @@ class BancoPostgres:
         if agora - self._ultima_verificacao < INTERVALO_VERIFICACAO:
             return
         self._ultima_verificacao = agora
+        self._copia()  # garante que a conta está preparada antes de ler a versão (conta nova)
         try:
-            remota = self._pg_conexao().execute(
-                "SELECT valor FROM meta WHERE chave = 'versao'").fetchone()["valor"]
+            linhas = self.cliente.executar(
+                "SELECT valor FROM meta WHERE chave = %s", ["versao"])["linhas"]
+            remota = linhas[0]["valor"] if linhas else 0
         except ERROS_CONEXAO:
             self._cair_offline()
             return
@@ -347,9 +302,8 @@ class BancoPostgres:
     # ----- interface usada pelo resto do projeto -----
 
     def consultar(self, sql, args=()):
-        if self._em_transacao:  # leitura dentro de transação: direto no Supabase, se online
-            return [dict(r) for r in self._pg_conexao().execute(sql.replace("?", "%s"), args).fetchall()]
-        self._verificar()
+        if not self._em_transacao:  # dentro de uma transação a cópia já está atualizada
+            self._verificar()
         return [dict(r) for r in self._copia().execute(sql, args).fetchall()]
 
     def gravar(self, sql, args=()):
@@ -362,20 +316,13 @@ class BancoPostgres:
         return self._gravar_offline(sql, args, tabela)
 
     def _gravar_online(self, sql, args, tabela):
-        pg = self._pg_conexao()
-        sql_pg = sql.replace("?", "%s")
-        if tabela in TABELAS_COM_ID and "ON CONFLICT" not in sql.upper():
+        sql_pg = _pg(sql)
+        if (tabela in TABELAS_COM_ID and "ON CONFLICT" not in sql.upper()
+                and "RETURNING" not in sql.upper()):
             sql_pg += " RETURNING id"
-        with pg.transaction():
-            cur = pg.execute(sql_pg, args)
-            novo_id = None
-            if " RETURNING id" in sql_pg:
-                linha = cur.fetchone()
-                novo_id = linha["id"] if linha else None
-            pg.execute("UPDATE meta SET valor = valor + 1 WHERE chave = 'versao'")
-            rowcount = cur.rowcount
+        resultado = self.cliente.executar(sql_pg, args)
         self._sincronizar(_tabelas_do_sql(sql) | {"meta"})
-        return novo_id, rowcount
+        return resultado.get("id"), resultado.get("afetadas", 0)
 
     def _gravar_offline(self, sql, args, tabela):
         local = self._copia()
@@ -389,22 +336,8 @@ class BancoPostgres:
 
     @contextmanager
     def transacao(self):
-        if not (self._online or self._tentar_reconectar()):
-            yield from self._transacao_offline()
-            return
-        pg = self._pg_conexao()
-        tocadas = set()
-        self._em_transacao = True
-        try:
-            with pg.transaction():  # confirma no fim; desfaz se der erro
-                yield _Adaptador(pg, tocadas)
-                pg.execute("UPDATE meta SET valor = valor + 1 WHERE chave = 'versao'")
-        finally:
-            self._em_transacao = False
-        self._sincronizar((tocadas | {"meta"}) or TABELAS_SINCRONIA)
-
-    def _transacao_offline(self):
-        """Offline: a transação roda na cópia e cada alteração vai para a fila."""
+        """Várias alterações como uma só. Rodam primeiro na cópia; depois vão ao Supabase
+        numa única chamada (tudo ou nada). Offline, vão para a fila na mesma ordem."""
         local = self._copia()
         registros = []
 
@@ -414,25 +347,46 @@ class BancoPostgres:
                 if sql.upper().lstrip().startswith(("INSERT", "UPDATE", "DELETE")):
                     tabela = (sql.split()[2] if sql.upper().startswith("INSERT INTO ")
                               else next(iter(_tabelas_do_sql(sql)), ""))
-                    novo_id = cur.lastrowid if (tabela in TABELAS_COM_ID and
-                                                sql.upper().startswith("INSERT")) else None
-                    registros.append((tabela, sql, args, novo_id))
+                    novo_id = cur.lastrowid if (tabela in TABELAS_COM_ID
+                                                and sql.upper().startswith("INSERT")) else None
+                    registros.append((tabela, sql, tuple(args), novo_id))
                 return cur
+
         self._em_transacao = True
         try:
             yield _Local()
-            registros.append(("meta", "UPDATE meta SET valor = valor + 1 WHERE chave = 'versao'", (), None))
-            local.execute("UPDATE meta SET valor = valor + 1 WHERE chave = 'versao'")
+            tocadas = set()
+            for tabela, sql, _args, _id in registros:
+                tocadas |= _tabelas_do_sql(sql)
+            if self._online or self._tentar_reconectar():
+                try:
+                    self.cliente.executar_lote([(_pg(s), a) for _t, s, a, _i in registros])
+                except ERROS_CONEXAO:
+                    self._cair_offline()
+                    self._enfileirar(registros)
+                except ErroBanco:
+                    local.rollback()
+                    self._sincronizar()
+                    raise
+                else:
+                    local.commit()
+                    self._sincronizar(tocadas | {"meta"})
+                    return
+            else:
+                self._enfileirar(registros)
             local.commit()
-            fila = self._fila_lista()
-            fila.extend({"tabela": t, "sql": s_, "args": list(a), "id": i} for t, s_, a, i in registros)
-            self._fila_salvar()
             self._salvar_cache()
         except Exception:
             local.rollback()
             raise
         finally:
             self._em_transacao = False
+
+    def _enfileirar(self, registros):
+        fila = self._fila_lista()
+        fila.extend({"tabela": t, "sql": s_, "args": list(a), "id": i} for t, s_, a, i in registros)
+        self._fila_salvar()
+        self._salvar_cache()
 
     def versao(self):
         self._verificar()
@@ -447,21 +401,22 @@ class BancoPostgres:
                 "falhas": self.falhas}
 
 
-def url_do_supabase() -> str:
-    """Conexão do Supabase: variável DATABASE_URL, ou o arquivo criptografado."""
-    if DATABASE_URL:
-        return DATABASE_URL
+def configuracao_supabase():
+    """(url, chave pública). Vêm de variáveis de ambiente (testes) ou do arquivo criptografado."""
+    import os
+    url, chave = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_CHAVE")
+    if url and chave:
+        return url, chave
     if not CONEXAO_PATH.exists():
         raise RuntimeError("Supabase não configurado. Rode supabase/configurar_conexao.py.")
-    from .seguranca import Cofre
-    return Cofre().decifrar(CONEXAO_PATH.read_bytes())["url"]
+    dados = Cofre().decifrar(CONEXAO_PATH.read_bytes())
+    return dados["url"], dados["chave"]
 
 
-def criar_banco(usuario: str):
-    """Banco do usuário, conforme a configuração (SQLite local ou Supabase)."""
+def criar_banco(usuario: str, cliente: ClienteSupabase = None):
+    """Banco do usuário logado, conforme a configuração (SQLite local ou Supabase)."""
     if TIPO_BANCO == "postgres":
-        return BancoPostgres(url_do_supabase(), esquema=f"financeiro_{slug(usuario)}",
-                             caminho_fila=PASTA / f"pendentes_{slug(usuario)}.dat",
+        return BancoPostgres(cliente, caminho_fila=PASTA / f"pendentes_{slug(usuario)}.dat",
                              caminho_cache=PASTA / f"cache_{slug(usuario)}.dat")
     caminho = BANCO_FORCADO or PASTA / f"financas_{slug(usuario)}.db"
     return BancoSqlite(caminho)
