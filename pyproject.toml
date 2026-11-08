@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "controle-financeiro"
+version = "2.0.0"
+description = "Controle de gastos dos cartões, empréstimos e caixinhas, com servidor para o Claude."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.6",
+    "mcp>=1.2,<2",
+    "cryptography>=42",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyflakes>=3"]
+
+[project.gui-scripts]
+controle-financeiro = "controle_financeiro.ui.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
