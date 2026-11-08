@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 from financas.contexto import auth, fin
 from .componentes import carregar_cores
-from .dialogos import GerenciarMeses, Login
+from .dialogos import ContaDialog, GerenciarMeses, Login
 from .paginas.emprestimos import DevePage
 from .paginas.planejamento import PlanejamentoPage
 from .paginas.comparativo import ComparativoPage
@@ -53,8 +53,11 @@ class Janela(QMainWindow):
         cl.setSpacing(8)
         rotulo_conta = QLabel("Conectado como")
         rotulo_conta.setObjectName("contaRotulo")
-        self.conta_nome = QLabel(auth().usuario_logado() or "")
+        self.conta_nome = QLabel(auth().nome_exibicao())
         self.conta_nome.setObjectName("contaNome")
+        conta_btn = QPushButton("Minha conta")
+        conta_btn.setObjectName("contaBtn")
+        conta_btn.clicked.connect(self.abrir_conta)
         trocar = QPushButton("Trocar usuário")
         trocar.setObjectName("contaBtn")
         trocar.clicked.connect(self.trocar_usuario)
@@ -63,6 +66,7 @@ class Janela(QMainWindow):
         sair.clicked.connect(self.sair)
         cl.addWidget(rotulo_conta)
         cl.addWidget(self.conta_nome)
+        cl.addWidget(conta_btn)
         cl.addWidget(trocar)
         cl.addWidget(sair)
         sl.addWidget(conta)
@@ -132,6 +136,16 @@ class Janela(QMainWindow):
                 return
         self._mudou_usuario()
 
+    def abrir_conta(self):
+        dialogo = ContaDialog(self)
+        dialogo.exec()
+        if dialogo.reiniciar:
+            QMessageBox.information(
+                self, "Projeto trocado",
+                "O app vai fechar. Abra de novo e entre com o e-mail e a senha do novo projeto.")
+            auth().sair()
+            QApplication.quit()
+
     def sair(self):
         if QMessageBox.question(
                 self, "Sair",
@@ -142,7 +156,7 @@ class Janela(QMainWindow):
         QApplication.quit()
 
     def _mudou_usuario(self):
-        self.conta_nome.setText(auth().usuario_logado() or "")
+        self.conta_nome.setText(auth().nome_exibicao())
         self.seletor.recarregar()
         self.atualizar_tudo()
 
@@ -219,6 +233,10 @@ class Janela(QMainWindow):
         e = fin().banco.estado()
         if e["tipo"] == "local":
             texto, cor = "● Banco local", "#6B7A99"
+        elif e.get("sessao_expirada"):
+            texto = (f"● Sessão expirada: feche e entre de novo para sincronizar · "
+                     f"{e['pendentes']} aguardando envio")
+            cor = "#B42318"
         elif not e["online"]:
             texto = f"● Sem conexão: usando a cópia salva · {e['pendentes']} aguardando envio"
             cor = "#B07A00"

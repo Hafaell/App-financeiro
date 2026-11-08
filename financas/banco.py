@@ -17,7 +17,7 @@ from .config import (BANCO_FORCADO, CARTOES_INICIAIS, CATEGORIAS_INICIAIS, CONEX
                      TIPO_BANCO)
 from .seguranca import Cofre
 from .esquema import TABELAS_COM_ID, comandos
-from .nuvem import ClienteSupabase, ErroBanco, ErroConexao
+from .nuvem import ClienteSupabase, ErroBanco, ErroConexao, SessaoExpirada
 from .utilidades import mes_do_calendario, slug
 
 
@@ -25,7 +25,8 @@ TABELAS_SINCRONIA = ("cartoes", "categorias", "rendas", "sessoes", "compras", "r
                      "despesas", "caixinhas", "pagamentos", "meta")
 INTERVALO_VERIFICACAO = 1.0  # segundos entre verificações de mudança no Supabase
 INTERVALO_TENTATIVA = 5.0    # segundos entre tentativas de reconectar, quando offline
-ERROS_CONEXAO = (ErroConexao,)
+# Sem internet ou sessão expirada: o app segue com a cópia salva e avisa na tela
+ERROS_CONEXAO = (ErroConexao, SessaoExpirada)
 _TABELA_RE = re.compile(r"(?:INTO|UPDATE|FROM)\s+([A-Za-z_]\w*)", re.IGNORECASE)
 
 
@@ -398,7 +399,7 @@ class BancoPostgres:
         self._verificar()
         pendentes = len(self._fila_lista())
         return {"tipo": "supabase", "online": self._online, "pendentes": pendentes,
-                "falhas": self.falhas}
+                "falhas": self.falhas, "sessao_expirada": not self.cliente.logado}
 
 
 def configuracao_supabase():

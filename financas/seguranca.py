@@ -93,13 +93,21 @@ class Autenticacao:
         lista.append({"nome": nome, "salt": salt, "hash": _hash_senha(senha, salt)})
         self._gravar_usuarios(lista)
 
-    def cadastrar(self, email, senha) -> bool:
+    def nome_exibicao(self):
+        """Nome para mostrar na tela (o nome do cadastro, ou o e-mail)."""
+        if self.nuvem:
+            if self.cliente and self.cliente.logado:
+                return self.cliente.nome_exibicao()
+            return ""
+        return self.usuario_logado() or ""
+
+    def cadastrar(self, email, senha, nome=None) -> bool:
         """Com Supabase: cria a conta. True = já entrou; False = confirme o e-mail antes."""
         if not self.nuvem:
             raise ValueError("Cadastro pelo app só existe com o Supabase.")
         from .nuvem import ErroBanco
         try:
-            return self.cliente.cadastrar(email.strip(), senha)
+            return self.cliente.cadastrar(email.strip(), senha, (nome or "").strip() or None)
         except ErroBanco as e:
             m = str(e).lower()
             if "already" in m or "registered" in m or "já" in m:

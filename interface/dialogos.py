@@ -1,6 +1,7 @@
 """Janelas de diálogo: login, novo cartão, meses, compra e edição."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QComboBox
 from PySide6.QtWidgets import (
     QCheckBox, QColorDialog, QDialog, QHBoxLayout,
     QLabel, QLineEdit, QMessageBox, QPushButton,
@@ -135,6 +136,8 @@ class Login(QDialog):
         self.subtitulo.setObjectName("rotulo")
         self.subtitulo.setWordWrap(True)
         self.usuario = texto(usuario_inicial, "E-mail" if auth().nuvem else "Usuário")
+        self.rot_nome = QLabel("Seu nome")
+        self.nome_cadastro = texto("", "Como você quer ser chamado")
         self.senha = texto("", "Senha")
         self.senha.setEchoMode(QLineEdit.EchoMode.Password)
         self.rot_confirma = QLabel("Repita a senha")
@@ -165,6 +168,8 @@ class Login(QDialog):
         self.sem_contas.setObjectName("rotulo")
         lay.addWidget(self.sem_contas)
         self._contas = list(contas or [])
+        lay.addWidget(self.rot_nome)
+        lay.addWidget(self.nome_cadastro)
         lay.addWidget(QLabel("E-mail" if auth().nuvem else "Usuário"))
         lay.addWidget(self.usuario)
         lay.addWidget(QLabel("Senha"))
@@ -194,6 +199,8 @@ class Login(QDialog):
         for i in range(self.botoes_contas.count()):
             self.botoes_contas.itemAt(i).widget().setVisible(mostrar_contas)
         self.sem_contas.setVisible(not criar and not self._contas and self._pede_contas)
+        self.rot_nome.setVisible(criar and auth().nuvem)
+        self.nome_cadastro.setVisible(criar and auth().nuvem)
         self.rot_confirma.setVisible(criar)
         self.confirma.setVisible(criar)
         self.principal.setText("Criar conta e entrar" if criar else "Entrar")
@@ -247,7 +254,7 @@ class Login(QDialog):
             return self._erro("As senhas não são iguais.")
         if auth().nuvem:
             try:
-                ja_entrou = auth().cadastrar(nome, senha)
+                ja_entrou = auth().cadastrar(nome, senha, self.nome_cadastro.text())
             except (ValueError, ErroConexao) as e:
                 return self._erro(str(e))
             if ja_entrou:
@@ -274,61 +281,176 @@ class Login(QDialog):
         self.senha.setFocus()
 
 
-class ConfigurarConexao(QDialog):
-    """Primeira abertura em um computador: guarda a URL do projeto e a chave pública do Supabase."""
+class ConectarSupabase(QDialog):
+    """Conexão com o Supabase: o token de acesso pessoal lista os projetos e o app guarda
+    o projeto escolhido (criptografado). modo: 'inicio', 'token' ou 'projeto'."""
 
-    def __init__(self):
+    def __init__(self, modo="inicio"):
         super().__init__()
+        from financas.conexao import ler_conexao
+        self.modo = modo
+        self.dados_antigos = ler_conexao()
+        self.token_usado = None
+        self.trocou_projeto = False
         self.setWindowTitle("Controle Financeiro")
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(480)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(32, 28, 32, 28)
         lay.setSpacing(10)
-        titulo = QLabel("Conectar ao Supabase")
-        titulo.setObjectName("secao")
-        ajuda = QLabel(
-            "Esses dois dados ficam no painel do Supabase, em Project Settings > Data API (URL) "
-            "e Project Settings > API Keys (chave pública, a que começa com sb_publishable_). "
-            "Não use a chave secreta (sb_secret_).")
-        ajuda.setObjectName("rotulo")
-        ajuda.setWordWrap(True)
-        self.url = texto("", "https://xxxxxxxx.supabase.co")
-        self.chave = texto("", "sb_publishable_...")
+        self.titulo = QLabel()
+        self.titulo.setObjectName("secao")
+        self.ajuda = QLabel()
+        self.ajuda.setObjectName("rotulo")
+        self.ajuda.setWordWrap(True)
+        self.rot_token = QLabel("Token de acesso pessoal")
+        self.token = QLineEdit()
+        self.token.setPlaceholderText("sbp_...")
+        self.token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.rot_projeto = QLabel("Projeto")
+        self.projetos = QComboBox()
         self.erro = QLabel("")
         self.erro.setWordWrap(True)
-        self.salvar = QPushButton("Salvar e continuar")
-        self.salvar.setObjectName("primario")
-        self.salvar.setDefault(True)
-        self.salvar.clicked.connect(self._salvar)
-        lay.addWidget(titulo)
-        lay.addWidget(ajuda)
-        lay.addWidget(QLabel("URL do projeto"))
-        lay.addWidget(self.url)
-        lay.addWidget(QLabel("Chave pública"))
-        lay.addWidget(self.chave)
-        lay.addWidget(self.erro)
-        lay.addWidget(self.salvar)
+        self.principal = QPushButton()
+        self.principal.setObjectName("primario")
+        self.principal.setDefault(True)
+        self.principal.clicked.connect(self._acao)
+        self.cancelar = QPushButton("Cancelar")
+        self.cancelar.clicked.connect(self.reject)
+        for w in (self.titulo, self.ajuda, self.rot_token, self.token, self.rot_projeto,
+                  self.projetos, self.erro, self.principal, self.cancelar):
+            lay.addWidget(w)
 
-    def _salvar(self):
-        from financas.config import CONEXAO_PATH
-        from financas.seguranca import Cofre
-        url = self.url.text().strip().rstrip("/")
-        if url.endswith("/rest/v1"):  # o app já adiciona esse caminho sozinho
-            url = url[: -len("/rest/v1")]
-        chave = self.chave.text().strip()
-        if not url.startswith("https://") or not url.endswith(".supabase.co"):
-            return self._erro("A URL precisa ser como https://xxxxxxxx.supabase.co")
-        if not chave:
-            return self._erro("Informe a chave pública.")
-        if chave.startswith("sb_secret") or "service_role" in chave:
-            return self._erro("Essa é a chave secreta. Use a chave pública (sb_publishable_).")
-        CONEXAO_PATH.parent.mkdir(parents=True, exist_ok=True)
-        CONEXAO_PATH.write_bytes(Cofre().cifrar({"url": url, "chave": chave}))
+        if modo == "projeto" and self.dados_antigos.get("token"):
+            self.token_usado = self.dados_antigos["token"]
+            self._carregar_projetos()
+        self._mostrar()
+
+    def _lista_carregada(self):
+        return self.projetos.count() > 0
+
+    def _mostrar(self):
+        carregada = self._lista_carregada()
+        titulos = {"inicio": "Conectar ao Supabase", "token": "Trocar token de acesso",
+                   "projeto": "Trocar projeto"}
+        self.titulo.setText(titulos.get(self.modo, "Conectar ao Supabase"))
+        self.ajuda.setText(
+            "Crie um token em supabase.com > Account > Access Tokens e cole aqui. "
+            "O app guarda o token criptografado neste computador, então você só precisa fazer isso "
+            "uma vez. Depois, escolha o projeto." if not carregada else
+            "Escolha o projeto que você quer usar.")
+        self.rot_token.setVisible(not carregada and self.modo != "projeto")
+        self.token.setVisible(not carregada and self.modo != "projeto")
+        self.rot_projeto.setVisible(carregada)
+        self.projetos.setVisible(carregada)
+        self.principal.setText("Usar este projeto" if carregada else "Continuar")
+        self.erro.setText("")
+
+    def _acao(self):
+        if self._lista_carregada():
+            return self._usar_projeto()
+        token = self.token.text().strip() or (self.dados_antigos.get("token") if self.modo == "projeto" else "")
+        if not token:
+            return self._erro("Cole o token de acesso.")
+        self.token_usado = token
+        self._carregar_projetos()
+
+    def _carregar_projetos(self):
+        from financas.conexao import listar_projetos
+        from financas.nuvem import ErroConexao
+        from financas.conexao import ErroProjeto
+        try:
+            lista = listar_projetos(self.token_usado)
+        except (ErroConexao, ErroProjeto) as e:
+            self.token_usado = None
+            return self._erro(str(e))
+        if not lista:
+            self.token_usado = None
+            return self._erro("Nenhum projeto encontrado nesta conta.")
+        self.projetos.clear()
+        for p in lista:
+            self.projetos.addItem(p["nome"], p["ref"])
+        self._mostrar()
+
+    def _usar_projeto(self):
+        from financas.conexao import ErroProjeto, credenciais_projeto, salvar_conexao
+        from financas.nuvem import ErroConexao
+        ref = self.projetos.currentData()
+        nome = self.projetos.currentText()
+        try:
+            url, chave = credenciais_projeto(self.token_usado, ref)
+        except (ErroConexao, ErroProjeto) as e:
+            return self._erro(str(e))
+        salvar_conexao({"token": self.token_usado, "ref": ref, "nome_projeto": nome,
+                        "url": url, "chave": chave})
+        self.trocou_projeto = ref != self.dados_antigos.get("ref")
         self.accept()
 
     def _erro(self, mensagem):
         self.erro.setText(mensagem)
         self.erro.setStyleSheet(f"color: {VERMELHO_TEXTO};")
+
+
+class ContaDialog(QDialog):
+    """Minha conta: mostra o nome e o projeto, e permite trocar o token ou o projeto."""
+
+    def __init__(self, pai):
+        super().__init__(pai)
+        from financas.conexao import ler_conexao
+        self.reiniciar = False
+        self.setWindowTitle("Minha conta")
+        self.setMinimumWidth(420)
+        conf = ler_conexao()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(32, 28, 32, 28)
+        lay.setSpacing(8)
+        titulo = QLabel("Minha conta")
+        titulo.setObjectName("secao")
+        lay.addWidget(titulo)
+        lay.addWidget(QLabel(f"Nome: {auth().nome_exibicao()}"))
+        lay.addWidget(QLabel(f"E-mail: {auth().usuario_logado() or ''}"))
+        lay.addWidget(QLabel(f"Projeto Supabase: {conf.get('nome_projeto') or 'não escolhido'}"))
+        for texto_botao, acao in (("Trocar token de acesso", self._trocar_token),
+                                  ("Trocar projeto", self._trocar_projeto),
+                                  ("Fechar", self.accept)):
+            b = QPushButton(texto_botao)
+            b.clicked.connect(acao)
+            lay.addWidget(b)
+
+    def _trocar_token(self):
+        if ConectarSupabase("token").exec() == QDialog.Accepted:
+            QMessageBox.information(self, "Minha conta", "Token atualizado.")
+
+    def _trocar_projeto(self):
+        if self._ha_pendencias():
+            QMessageBox.warning(self, "Minha conta",
+                                "Há alterações esperando para serem enviadas ao projeto atual. "
+                                "Conecte-se à internet e aguarde o envio antes de trocar o projeto.")
+            return
+        dialogo = ConectarSupabase("projeto")
+        if dialogo.exec() != QDialog.Accepted:
+            return
+        if dialogo.trocou_projeto:
+            self._limpar_cache()
+            self.reiniciar = True
+            self.accept()
+        else:
+            QMessageBox.information(self, "Minha conta", "Você continua no mesmo projeto.")
+
+    def _ha_pendencias(self):
+        from financas.config import PASTA
+        from financas.seguranca import Cofre
+        for arquivo in PASTA.glob("pendentes_*.dat"):
+            try:
+                if Cofre().decifrar(arquivo.read_bytes()):
+                    return True
+            except Exception:
+                return True
+        return False
+
+    def _limpar_cache(self):
+        from financas.config import PASTA
+        for arquivo in PASTA.glob("cache_*.dat"):
+            arquivo.unlink(missing_ok=True)
 
 
 class GerenciarMeses(QDialog):

@@ -70,7 +70,16 @@ class ImportarPage(Pagina):
         self.tabela.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tabela.setAlternatingRowColors(True)
         self.tabela.setShowGrid(False)
-        self.tabela.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        # Larguras pensadas para ler cada campo; a descrição ocupa o espaço que sobrar
+        cabecalho = self.tabela.horizontalHeader()
+        cabecalho.setMinimumSectionSize(70)
+        larguras = {0: 70, 1: 100, 2: 340, 3: 90, 4: 115, 5: 160, 6: 170}
+        for coluna, largura in larguras.items():
+            cabecalho.setSectionResizeMode(coluna, QHeaderView.ResizeMode.Interactive)
+            self.tabela.setColumnWidth(coluna, largura)
+        cabecalho.setSectionResizeMode(7, QHeaderView.ResizeMode.Stretch)  # Situação usa o resto
+        self.tabela.verticalHeader().setDefaultSectionSize(40)
+        self.tabela.setMinimumHeight(340)
         lay.addWidget(self.tabela, 1)
 
         rodape = QHBoxLayout()
@@ -118,6 +127,7 @@ class ImportarPage(Pagina):
             for col, valor in ((1, data), (2, it["descricao"]), (3, it["parcelas"]), (4, brl(it["valor"])), (7, situacao)):
                 cel = QTableWidgetItem(valor)
                 cel.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                cel.setToolTip(valor)  # texto completo ao passar o mouse
                 self.tabela.setItem(linha, col, cel)
             pessoa = QLineEdit()
             pessoa.setPlaceholderText("vazio = você")
