@@ -8,3 +8,6 @@ dist/
 .venv/
 venv/
 .env
+
+# Configuração pessoal do Claude Code
+.claude/settings.local.json
