@@ -44,6 +44,20 @@ class Categorias:
             con.execute("DELETE FROM categorias WHERE id = ?", (int(id_),))
         return True
 
+    def classificar(self, tabela, id_, categoria_id) -> bool:
+        """Só troca a categoria de uma compra ou despesa que já existe (não recria nada).
+        categoria_id vazio = tira a categoria."""
+        if tabela not in ("compras", "despesas"):
+            raise ValueError("Só compras e despesas têm categoria.")
+        cat = int(categoria_id) if categoria_id not in (None, "") else None
+        if cat is not None and not self.obter(cat):
+            raise ValueError("Categoria não encontrada.")
+        _, n = self.banco.gravar(f"UPDATE {tabela} SET categoria_id = ? WHERE id = ?",
+                                 (cat, int(id_)))
+        if n == 0:
+            raise ValueError("Lançamento não encontrado.")
+        return True
+
     def gasto_do_mes(self, mes=None) -> dict:
         """Quanto já foi usado em cada categoria no mês: {categoria_id: valor}.
         Conta compras que são suas (sem empréstimo) e despesas lançadas à parte."""

@@ -92,6 +92,16 @@ def _id_da_categoria(nome: str):
 
 
 @mcp.tool()
+def definir_categoria(tabela: str, id: int, categoria: str) -> dict:
+    """Troca SÓ a categoria de uma compra ou despesa que já existe (não apaga nem recria).
+    tabela: 'compras' ou 'despesas'. id: veja em listar_compras / listar_lancamentos.
+    categoria: nome de uma categoria cadastrada (use listar_categorias). Vazio = sem categoria."""
+    if categoria and _id_da_categoria(categoria) is None:
+        return {"ok": False, "erro": f"Categoria '{categoria}' não existe."}
+    return {"ok": fin().classificar(tabela, id, _id_da_categoria(categoria))}
+
+
+@mcp.tool()
 def listar_compras(cartao: str = "", mes: str = "") -> list[dict]:
     """Lista as compras de cartão do mês. cartao: nome de um cartão cadastrado (vazio = todos)."""
     return fin().listar_compras(cartao or None, mes or None)

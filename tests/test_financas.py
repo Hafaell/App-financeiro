@@ -39,3 +39,15 @@ def test_lancamentos_guardam_a_data_do_dia_e_a_virada_mantem():
     app.virar_mes()
     novas = [c for c in app.listar_compras() if c["item"] == "Cinema"]
     assert novas and novas[0]["data_lancamento"] == hoje
+
+
+def test_classificar_troca_so_a_categoria_sem_recriar():
+    app = _app()
+    cartao = app.listar_cartoes()[0]["nome"]
+    id_ = app.lancar_compra(cartao, "Mercado", "R$ 100,00", parcelas="", pessoa=".")
+    cat = app.listar_categorias()[0]["id"]
+    assert app.classificar("compras", id_, cat)
+    compra = app.obter_compra(id_)
+    assert compra["id"] == id_ and compra["categoria_id"] == cat and compra["item"] == "Mercado"
+    app.classificar("compras", id_, None)
+    assert app.obter_compra(id_)["categoria_id"] is None

@@ -189,6 +189,9 @@ class Financas:
     def atualizar_categoria(self, id_, nome, cor, orcamento=0):
         return self.categorias.atualizar(id_, nome, cor, orcamento)
 
+    def classificar(self, tabela, id_, categoria_id):
+        return self.categorias.classificar(tabela, id_, categoria_id)
+
     def apagar_categoria(self, id_):
         return self.categorias.apagar(id_)
 
