@@ -23,3 +23,19 @@ def test_compra_com_pessoa_vira_emprestimo_e_nao_entra_no_meu_cartao():
     depois = app.resumo_mes()
     assert depois["meu_cartao_total"] == antes["meu_cartao_total"]
     assert depois["cartoes_com_emprestimos_total"] >= antes["cartoes_com_emprestimos_total"] + 50.0
+
+
+def test_lancamentos_guardam_a_data_do_dia_e_a_virada_mantem():
+    from datetime import date
+    app = _app()
+    hoje = date.today().isoformat()
+    cartao = app.listar_cartoes()[0]["nome"]
+    cid = app.lancar_compra(cartao, "Cinema", "R$ 40,00", parcelas="1/3", pessoa=".")
+    rid = app.adicionar_lancamento("receitas", "Salário teste", "R$ 100,00")
+    did = app.adicionar_lancamento("despesas", "Luz teste", "R$ 50,00", recorrente=True)
+    assert app.obter_compra(cid)["data_lancamento"] == hoje
+    assert app.obter_lancamento("receitas", rid)["data_lancamento"] == hoje
+    assert app.obter_lancamento("despesas", did)["data_lancamento"] == hoje
+    app.virar_mes()
+    novas = [c for c in app.listar_compras() if c["item"] == "Cinema"]
+    assert novas and novas[0]["data_lancamento"] == hoje

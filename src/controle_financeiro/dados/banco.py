@@ -68,6 +68,9 @@ class BancoSqlite:
         for tabela in ("compras", "despesas"):
             if "categoria_id" not in colunas(tabela):
                 con.execute(f"ALTER TABLE {tabela} ADD COLUMN categoria_id INTEGER")
+        for tabela in ("compras", "receitas", "despesas"):
+            if "data_lancamento" not in colunas(tabela):
+                con.execute(f"ALTER TABLE {tabela} ADD COLUMN data_lancamento TEXT")
         for coluna, tipo in (("meta", "REAL"), ("data_alvo", "TEXT")):
             if coluna not in colunas("caixinhas"):
                 con.execute(f"ALTER TABLE caixinhas ADD COLUMN {coluna} {tipo}")

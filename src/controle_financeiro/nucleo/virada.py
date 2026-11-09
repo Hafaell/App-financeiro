@@ -32,18 +32,20 @@ class Virada:
                     continue
                 con.execute(
                     "INSERT INTO compras (mes, cartao, item, parcelas, valor_parcela, "
-                    "emprestimo, pessoa, valor_real, recorrente, categoria_id) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    "emprestimo, pessoa, valor_real, recorrente, categoria_id, data_lancamento) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (novo, c["cartao"], c["item"], nova, c["valor_parcela"],
-                     c["emprestimo"], c["pessoa"], c["valor_real"], c["recorrente"], c["categoria_id"]))
+                     c["emprestimo"], c["pessoa"], c["valor_real"], c["recorrente"], c["categoria_id"],
+                     c["data_lancamento"]))
                 if nova != c["parcelas"]:
                     avancadas.append((c["item"], c["cartao"], nova))
 
             for d in con.execute("SELECT * FROM despesas WHERE mes = ?", (origem,)).fetchall():
                 desc = d["descricao"]
                 if d["recorrente"]:
-                    con.execute("INSERT INTO despesas (mes, descricao, valor, recorrente, categoria_id) "
-                                "VALUES (?,?,?,1,?)", (novo, desc, d["valor"], d["categoria_id"]))
+                    con.execute("INSERT INTO despesas (mes, descricao, valor, recorrente, categoria_id, data_lancamento) "
+                                "VALUES (?,?,?,1,?,?)",
+                                (novo, desc, d["valor"], d["categoria_id"], d["data_lancamento"]))
                     continue
                 m = re.search(r"\((\d+)/(\d+)\)", desc)
                 nova = avancar_parcela(f"{m[1]}/{m[2]}") if m else None
@@ -52,10 +54,11 @@ class Virada:
                     continue
                 desc = desc.replace(m[0], f"({nova})")
                 avancadas.append((desc, "Despesa", nova))
-                con.execute("INSERT INTO despesas (mes, descricao, valor, recorrente, categoria_id) "
-                            "VALUES (?,?,?,0,?)", (novo, desc, d["valor"], d["categoria_id"]))
+                con.execute("INSERT INTO despesas (mes, descricao, valor, recorrente, categoria_id, data_lancamento) "
+                            "VALUES (?,?,?,0,?,?)",
+                            (novo, desc, d["valor"], d["categoria_id"], d["data_lancamento"]))
 
             for r in con.execute("SELECT * FROM receitas WHERE mes = ?", (origem,)).fetchall():
-                con.execute("INSERT INTO receitas (mes, descricao, valor) VALUES (?,?,?)",
-                            (novo, r["descricao"], r["valor"]))
+                con.execute("INSERT INTO receitas (mes, descricao, valor, data_lancamento) VALUES (?,?,?,?)",
+                            (novo, r["descricao"], r["valor"], r["data_lancamento"]))
         return {"origem": origem, "novo": novo, "avancadas": avancadas, "removidas": removidas}

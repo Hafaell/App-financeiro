@@ -1,5 +1,6 @@
 """Compras nos cartões. Pessoa preenchida = empréstimo daquela pessoa."""
 import re
+from datetime import date
 
 from controle_financeiro.nucleo.utilidades import dinheiro
 
@@ -30,7 +31,8 @@ class Compras:
                               recorrente, categoria_id)
         id_, _ = self.banco.gravar(
             "INSERT INTO compras (mes, cartao, item, parcelas, valor_parcela, emprestimo, "
-            "pessoa, valor_real, recorrente, categoria_id) VALUES (?,?,?,?,?,?,?,?,?,?)", (m,) + dados)
+            "pessoa, valor_real, recorrente, categoria_id, data_lancamento) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (m,) + dados + (date.today().isoformat(),))
         return id_
 
     def atualizar(self, id_, cartao, item, parcelas, valor_parcela, pessoa=".",

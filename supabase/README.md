@@ -9,6 +9,7 @@ Rode os scripts de `migracoes/` no SQL Editor do Supabase, **na ordem**:
 | `03_executar_sql.sql` | Funções que o app usa para ler e gravar (`executar_sql` e `executar_lote`) | Uma vez |
 | `04_cadastro_permitido.sql` | Lista de e-mails autorizados (versão antiga do cadastro) | Não é mais necessário |
 | `05_liberar_cadastro.sql` | Libera o cadastro de contas pelo app | Uma vez |
+| `06_data_lancamento.sql` | Adiciona a coluna com a data em que cada lançamento foi feito | Uma vez, antes de usar a versão com "Lançado em" |
 
 A conexão do app com o projeto é feita dentro do próprio app, na primeira abertura,
 com o token de acesso pessoal do Supabase (Account > Access Tokens).

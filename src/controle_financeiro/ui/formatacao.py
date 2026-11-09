@@ -8,6 +8,14 @@ def brl(v) -> str:
     return f"R$ {s}"
 
 
+def data_br(iso) -> str:
+    """'2026-11-08' -> '08/11/2026'. Sem data (lançamento antigo): '—'."""
+    if not iso or len(str(iso)) < 10:
+        return "—"
+    s = str(iso)
+    return f"{s[8:10]}/{s[5:7]}/{s[:4]}"
+
+
 def nomes_cartoes():
     return [c["nome"] for c in fin().listar_cartoes()]
 

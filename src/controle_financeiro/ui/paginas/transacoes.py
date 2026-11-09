@@ -8,7 +8,7 @@ from controle_financeiro.ui.dialogos import CategoriasDialog
 from controle_financeiro.dados.contexto import fin
 from controle_financeiro.ui.componentes import BalaoCartao, Formulario, carregar_cores, combo, nova_tabela, preencher, selecionado
 from controle_financeiro.ui.dialogos import NovoCartao, campos_compra, dialogo_compra
-from controle_financeiro.ui.formatacao import NOVO_CARTAO, TODOS, _ordem_cartoes, _parcela_exibida, _pessoa_exibida, brl, nomes_cartoes
+from controle_financeiro.ui.formatacao import NOVO_CARTAO, TODOS, _ordem_cartoes, _parcela_exibida, _pessoa_exibida, brl, data_br, nomes_cartoes
 from controle_financeiro.ui.paginas.base import Pagina
 
 
@@ -16,7 +16,7 @@ class CartoesPage(Pagina):
     """Transações: compras de todos os cartões, com cadastro de cartões novos."""
 
     COLUNAS = ["Cartão", "Item", "Categoria", "Parcelas", "Valor da parcela",
-               "Recorrente", "Pessoa"]
+               "Recorrente", "Pessoa", "Lançado em"]
 
     def __init__(self, janela):
         super().__init__(janela)
@@ -93,7 +93,7 @@ class CartoesPage(Pagina):
         preencher(self.tab, [
             (c["id"], [
                 c["cartao"], c["item"], nome_categoria(c["categoria_id"], mapa), _parcela_exibida(c), brl(c["valor_parcela"]),
-                "Sim" if c["recorrente"] else "Não", _pessoa_exibida(c),
+                "Sim" if c["recorrente"] else "Não", _pessoa_exibida(c), data_br(c.get("data_lancamento")),
             ]) for c in linhas], cartao_col=0)
         self._aplicar_busca()
         r = fin().resumo_mes(self.mes())

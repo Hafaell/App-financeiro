@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 from controle_financeiro.ui.formatacao import categorias_opcoes, id_categoria, nome_categoria
 from controle_financeiro.dados.contexto import fin
 from controle_financeiro.ui.componentes import Formulario, combo, nova_tabela, preencher, selecionado, texto
-from controle_financeiro.ui.formatacao import brl, nomes_cartoes
+from controle_financeiro.ui.formatacao import brl, data_br, nomes_cartoes
 from controle_financeiro.ui.paginas.base import Pagina
 
 
@@ -35,7 +35,7 @@ class PainelLancamento(QWidget):
         cabecalho.addWidget(apagar)
         cabecalho.addWidget(add)
         lay.addLayout(cabecalho)
-        colunas = ["Descrição", "Valor"] + (["Categoria", "Recorrente"] if com_recorrente else [])
+        colunas = ["Descrição", "Valor"] + (["Categoria", "Recorrente"] if com_recorrente else []) + ["Lançado em"]
         self.tab = nova_tabela(colunas)
         self.tab.doubleClicked.connect(lambda _i: self.editar())
         lay.addWidget(self.tab)
@@ -64,6 +64,7 @@ class PainelLancamento(QWidget):
             if self.com_recorrente:
                 v.append(nome_categoria(l.get("categoria_id")))
                 v.append("Sim" if l.get("recorrente") else "Não")
+            v.append(data_br(l.get("data_lancamento")))
             return v
 
         itens = []
@@ -77,6 +78,7 @@ class PainelLancamento(QWidget):
                 if self.com_recorrente:
                     v.append("—")
                     v.append("—")
+                v.append("—")
                 itens.append((-(i + 1), v))
                 total += valor
         preencher(self.tab, itens + [(l["id"], valores(l)) for l in linhas])

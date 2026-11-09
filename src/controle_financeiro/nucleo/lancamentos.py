@@ -1,4 +1,6 @@
 """Receitas e despesas lançadas por mês. Só despesas podem ser recorrentes."""
+from datetime import date
+
 from controle_financeiro.config import TABELAS_LANCAMENTO
 from controle_financeiro.nucleo.utilidades import dinheiro
 
@@ -29,13 +31,16 @@ class Lancamentos:
         m = self.meses.interpretar(mes)
         self.meses.exigir(m)
         desc = self._descricao(descricao)
+        hoje = date.today().isoformat()  # dia em que foi lançado
         if t == "despesas":
             id_, _ = self.banco.gravar(
-                "INSERT INTO despesas (mes, descricao, valor, recorrente, categoria_id) VALUES (?,?,?,?,?)",
-                (m, desc, dinheiro(valor), int(bool(recorrente)), self._cat(categoria_id)))
+                "INSERT INTO despesas (mes, descricao, valor, recorrente, categoria_id, data_lancamento) "
+                "VALUES (?,?,?,?,?,?)",
+                (m, desc, dinheiro(valor), int(bool(recorrente)), self._cat(categoria_id), hoje))
         else:
-            id_, _ = self.banco.gravar("INSERT INTO receitas (mes, descricao, valor) VALUES (?,?,?)",
-                                       (m, desc, dinheiro(valor)))
+            id_, _ = self.banco.gravar(
+                "INSERT INTO receitas (mes, descricao, valor, data_lancamento) VALUES (?,?,?,?)",
+                (m, desc, dinheiro(valor), hoje))
         return id_
 
     def atualizar(self, tabela, id_, descricao, valor, recorrente=False, categoria_id=None) -> bool:

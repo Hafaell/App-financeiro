@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 from controle_financeiro.dados.contexto import fin
 from controle_financeiro.ui.componentes import BalaoCartao, ComboPessoa, Formulario, Kpi, nova_tabela, preencher, selecionado, texto
 from controle_financeiro.ui.dialogos import dialogo_compra
-from controle_financeiro.ui.formatacao import _parcela_exibida, brl
+from controle_financeiro.ui.formatacao import _parcela_exibida, brl, data_br
 from controle_financeiro.ui.paginas.base import Pagina
 
 
@@ -56,7 +56,7 @@ class DevePage(Pagina):
         self.botao_pagar.clicked.connect(self.pagamento)
         cabecalho.addWidget(self.botao_pagar)
         direita.addLayout(cabecalho)
-        self.det = nova_tabela(["Item", "Mês", "Cartão", "Parcelas", "Valor"])
+        self.det = nova_tabela(["Item", "Mês", "Cartão", "Parcelas", "Valor", "Lançado em"])
         self.det.setItemDelegateForColumn(2, BalaoCartao(self.det))
         self.det.doubleClicked.connect(lambda _i: self.editar_emprestimo())
         direita.addWidget(self.det, 1)
@@ -94,7 +94,7 @@ class DevePage(Pagina):
         self.det_titulo.setText(f"Empréstimos de {pessoa}")
         preencher(self.det, [
             (c["id"], [c["item"], fin().nome_mes(c["mes"]), c["cartao"], _parcela_exibida(c),
-                       brl(c["valor_parcela"])])
+                       brl(c["valor_parcela"]), data_br(c.get("data_lancamento"))])
             for c in fin().emprestimos_de(pessoa, self.mes())], cartao_col=2)
 
     def editar_emprestimo(self):

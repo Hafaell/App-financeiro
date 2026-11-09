@@ -15,13 +15,15 @@ TABELAS = [
         pessoa TEXT NOT NULL DEFAULT '.',
         valor_real {REAL},
         recorrente INTEGER NOT NULL DEFAULT 0,
-        categoria_id {INT}
+        categoria_id {INT},
+        data_lancamento TEXT
     )""",
     """CREATE TABLE IF NOT EXISTS receitas (
         id {ID},
         mes TEXT NOT NULL,
         descricao TEXT NOT NULL,
-        valor {REAL} NOT NULL
+        valor {REAL} NOT NULL,
+        data_lancamento TEXT
     )""",
     """CREATE TABLE IF NOT EXISTS despesas (
         id {ID},
@@ -29,7 +31,8 @@ TABELAS = [
         descricao TEXT NOT NULL,
         valor {REAL} NOT NULL,
         recorrente INTEGER NOT NULL DEFAULT 0,
-        categoria_id {INT}
+        categoria_id {INT},
+        data_lancamento TEXT
     )""",
     """CREATE TABLE IF NOT EXISTS caixinhas (
         id {ID},
