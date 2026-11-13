@@ -18,9 +18,9 @@ if exist dist rmdir /s /q dist
 
 REM --onedir: nada se auto-extrai em pasta temporaria ao abrir (comportamento que acende alerta).
 REM --noupx: nao compacta com UPX (compactadores sao tratados como suspeitos).
-python -m PyInstaller --noconfirm --clean --noupx --onedir --noconsole --name ControleFinanceiro --icon assets\icone.ico --add-data "assets\icone.png;assets" --paths src iniciar.pyw
+python -m PyInstaller --noconfirm --clean --noupx --onedir --noconsole --name ControleFinanceiro --icon assets\icone.ico --version-file assets\versao.txt --add-data "assets\icone.png;assets" --paths src iniciar.pyw
 if errorlevel 1 goto erro
-python -m PyInstaller --noconfirm --clean --noupx --onedir --icon assets\icone.ico --name mcp_server --paths src src\controle_financeiro\servidor_claude\__main__.py
+python -m PyInstaller --noconfirm --clean --noupx --onedir --icon assets\icone.ico --version-file assets\versao.txt --name mcp_server --paths src src\controle_financeiro\servidor_claude\__main__.py
 if errorlevel 1 goto erro
 
 REM O servidor do Claude vai para dentro da pasta do app, para entregar uma pasta so.
