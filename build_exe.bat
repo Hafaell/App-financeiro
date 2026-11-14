@@ -1,9 +1,9 @@
 @echo off
 REM Gera o app em modo "pasta" (onedir), que o Windows Defender/SmartScreen barra bem menos
-REM do que um .exe unico (onefile), e cria o ControleFinanceiro.zip pronto para enviar.
+REM do que um .exe unico (onefile), e cria o instalador pronto para enviar.
 REM Resultado: dist\ControleFinanceiro\ControleFinanceiro.exe
 REM            dist\ControleFinanceiro\servidor_claude\mcp_server.exe  (servidor do Claude)
-REM            dist\ControleFinanceiro.zip
+REM            dist\InstaladorControleFinanceiro.exe  (o que voce abre/envia)
 cd /d "%~dp0"
 set PYTHONPATH=%CD%\src
 
@@ -27,14 +27,23 @@ REM O servidor do Claude vai para dentro da pasta do app, para entregar uma past
 move "dist\mcp_server" "dist\ControleFinanceiro\servidor_claude" >nul
 if errorlevel 1 goto erro
 
-powershell -NoProfile -Command "Compress-Archive -Path 'dist\ControleFinanceiro' -DestinationPath 'dist\ControleFinanceiro.zip' -Force"
+REM Instalador de um arquivo so (Inno Setup): copia o app, cria atalhos nativos e nao precisa destravar zip.
+REM Instale o Inno Setup 6 uma vez: winget install JRSoftware.InnoSetup
+set ISCC=
+if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
+if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+if "%ISCC%"=="" (
+    echo Inno Setup nao encontrado. Rode: winget install JRSoftware.InnoSetup
+    goto erro
+)
+"%ISCC%" instalador.iss
 if errorlevel 1 goto erro
 
 echo.
-echo Pronto. Envie o arquivo dist\ControleFinanceiro.zip.
-echo No outro computador: extraia o zip (nao execute de dentro dele) e abra ControleFinanceiro.exe.
-echo Se o Windows avisar: botao direito no .zip ^> Propriedades ^> Desbloquear (antes de extrair),
-echo ou na tela azul clique em "Mais informacoes" ^> "Executar assim mesmo".
+echo Pronto. Envie/abra o arquivo dist\InstaladorControleFinanceiro.exe
+echo Ele instala o app, cria o atalho na area de trabalho e no menu Iniciar.
+echo Se aparecer a tela azul do SmartScreen: "Mais informacoes" ^> "Executar assim mesmo".
 echo.
 echo Para reduzir ainda mais, envie o .exe como falso positivo em
 echo https://www.microsoft.com/wdsi/filesubmission
