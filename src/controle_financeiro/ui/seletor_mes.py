@@ -2,9 +2,10 @@
 from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
-    QStyle, QVBoxLayout,
+    QVBoxLayout,
 )
 from controle_financeiro.dados.contexto import fin
+from controle_financeiro.ui.componentes import icone_seta
 from controle_financeiro.nucleo.utilidades import MESES_EXIBIR
 
 
@@ -24,13 +25,13 @@ class MesSeletor(QFrame):
         lay.setSpacing(10)
         self.antes = QPushButton()
         self.depois = QPushButton()
-        self.antes.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
-        self.depois.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
+        self.antes.setIcon(icone_seta("esquerda"))
+        self.depois.setIcon(icone_seta("direita"))
         for b in (self.antes, self.depois):
             b.setObjectName("setaMes")
             b.setFixedSize(38, 38)
             b.setIconSize(QSize(16, 16))
-            b.setToolTip("Mês anterior" if b is self.antes else "Próximo mês")
+            b.setToolTip("Mês anterior (Alt+←)" if b is self.antes else "Próximo mês (Alt+→)")
         textos = QVBoxLayout()
         textos.setSpacing(0)
         self.nome = QLabel()
@@ -47,8 +48,8 @@ class MesSeletor(QFrame):
         lay.addSpacing(8)
         lay.addWidget(self.voltar)
 
-        self.antes.clicked.connect(lambda: self._mover(-1))
-        self.depois.clicked.connect(lambda: self._mover(1))
+        self.antes.clicked.connect(self.anterior)
+        self.depois.clicked.connect(self.proximo)
         self.voltar.clicked.connect(self._ir_atual)
         self.recarregar()
 
@@ -67,8 +68,17 @@ class MesSeletor(QFrame):
             self._i = len(self._codigos) - 1
         self._mostrar()
 
+    def anterior(self):
+        self._mover(-1)
+
+    def proximo(self):
+        self._mover(1)
+
     def _mover(self, passo):
-        self._i = min(max(self._i + passo, 0), len(self._codigos) - 1)
+        novo = min(max(self._i + passo, 0), len(self._codigos) - 1)
+        if novo == self._i:  # já está no primeiro ou no último mês aberto
+            return
+        self._i = novo
         self._mostrar()
         self.mudou.emit()
 

@@ -12,7 +12,7 @@ from controle_financeiro.config import PASTA, TIPO_BANCO
 from controle_financeiro.dados.conexao import conexao_configurada
 from controle_financeiro.ui.dialogos import ConectarSupabase, Login
 from controle_financeiro.ui.janela import Janela
-from controle_financeiro.ui.tema import TEMA
+from controle_financeiro.ui.tema import montar_tema
 
 
 def caminho_icone():
@@ -36,7 +36,7 @@ def main():
     if icone:
         app.setWindowIcon(QIcon(str(icone)))  # janela, barra de tarefas e dialogos
     app.setStyle("Fusion")
-    app.setStyleSheet(TEMA)
+    app.setStyleSheet(montar_tema(PASTA / "tema"))
     if TIPO_BANCO == "postgres" and not conexao_configurada():
         if ConectarSupabase("inicio").exec() != QDialog.Accepted:
             sys.exit(0)

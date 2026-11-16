@@ -25,7 +25,8 @@ class BuscaDialog(QDialog):
         self.campo = texto("", "Ex.: mercado, Pai, Netflix")
         self.campo.returnPressed.connect(self.procurar)
         lay.addWidget(self.campo)
-        self.tab = nova_tabela(["Mês", "Origem", "Descrição", "Valor", "Pessoa"])
+        self.tab = nova_tabela(["Mês", "Origem", "Descrição", "Valor", "Pessoa"],
+                               "Digite o que procura e aperte Enter.")
         lay.addWidget(self.tab, 1)
         self.contagem = QLabel("")
         self.contagem.setObjectName("rotulo")
@@ -38,6 +39,7 @@ class BuscaDialog(QDialog):
         resultados = fin().buscar(self.campo.text())
         preencher(self.tab, [(i, [r["mes_nome"], r["origem"], r["texto"], brl(r["valor"]),
                                   r["extra"] or "—"]) for i, r in enumerate(resultados)])
+        self.tab.vazio = f"Nada encontrado para “{self.campo.text().strip()}”."
         self.contagem.setText(f"{len(resultados)} resultado(s)")
 
 
@@ -102,7 +104,7 @@ class DatasCartoesDialog(QDialog):
         lay.setSpacing(12)
         lay.addWidget(QLabel("Datas das faturas"))
         self.tab = nova_tabela(["Cartão", "Fechamento (dia)", "Vencimento (dia)"])
-        self.tab.doubleClicked.connect(lambda _i: self.editar())
+        self.tab.ao_editar(self.editar)
         lay.addWidget(self.tab, 1)
         fechar = QPushButton("Fechar")
         fechar.clicked.connect(self.accept)

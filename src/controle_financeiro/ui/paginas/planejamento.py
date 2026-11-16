@@ -11,16 +11,20 @@ class PlanejamentoPage(Pagina):
     def __init__(self, janela):
         super().__init__(janela)
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
 
         lay.addWidget(self._titulo("Assinaturas e itens recorrentes"))
         self.total_assinaturas = QLabel()
         self.total_assinaturas.setObjectName("rotulo")
         lay.addWidget(self.total_assinaturas)
-        self.tab_assinaturas = nova_tabela(["Item", "Origem", "Por mês", "Por ano"])
+        self.tab_assinaturas = nova_tabela(
+            ["Item", "Origem", "Por mês", "Por ano"],
+            "Nenhum item recorrente neste mês.\nMarque Recorrente em uma compra ou despesa para ela aparecer aqui.")
         self.tab_assinaturas.setMinimumHeight(190)
-        lay.addWidget(self.tab_assinaturas)
+        lay.addWidget(self.tab_assinaturas, 1)
 
+        lay.addSpacing(8)
         lay.addWidget(self._titulo("Parcelas dos próximos meses"))
         self.aviso_parcelas = QLabel("Soma das parcelas que ainda vão cair em cada mês, por cartão "
                                      "(compras suas com parcelas).")
@@ -28,7 +32,7 @@ class PlanejamentoPage(Pagina):
         lay.addWidget(self.aviso_parcelas)
         self.tab_parcelas = nova_tabela(["Mês", "Total"])
         self.tab_parcelas.setMinimumHeight(230)
-        lay.addWidget(self.tab_parcelas)
+        lay.addWidget(self.tab_parcelas, 1)
 
     @staticmethod
     def _titulo(texto):

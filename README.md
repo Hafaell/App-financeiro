@@ -15,6 +15,18 @@ os mesmos dados.
 
 Para configurar o banco, veja `supabase/README.md`.
 
+## Menu e atalhos
+
+O menu lateral tem três seções:
+
+- **Geral:** Visão geral, Transações, Receitas e despesas, Planejamento e Comparativo.
+- **Pessoal:** Empréstimos (quem te deve) e Caixinhas.
+- **Sistema:** Importar extrato e Ferramentas.
+
+Atalhos do teclado: `Ctrl+1` a `Ctrl+9` abrem cada item do menu, `Ctrl+N` cria um lançamento na
+página aberta, `Ctrl+F` busca, `Enter` edita e `Delete` apaga a linha selecionada, `Alt+←` e
+`Alt+→` trocam o mês e `F5` atualiza os dados. A lista também aparece em Ferramentas.
+
 ## Estrutura
 
 ```
@@ -42,7 +54,9 @@ controle-financeiro/
       autenticacao.py      entrar, sair e sessão
     ui/                    interface gráfica (PySide6)
       app.py               inicialização e tela de entrada
-      janela.py            janela principal
+      janela.py            janela principal: menu em seções, mês, conta e atalhos
+      componentes.py       menu lateral, tabelas, cards e formulários
+      tema.py              cores e folha de estilo
       dialogos.py          telas de entrada, cadastro, conexão e Minha conta
       paginas/             uma página por aba
     servidor_claude/       servidor MCP para o Claude

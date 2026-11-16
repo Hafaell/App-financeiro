@@ -1,6 +1,6 @@
-"""Receitas e despesas (lista de lançamentos)."""
+"""Página Receitas e despesas: as duas listas de lançamentos do mês, lado a lado."""
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QHBoxLayout, QLabel,
+    QBoxLayout, QCheckBox, QDialog, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 from controle_financeiro.ui.formatacao import categorias_opcoes, id_categoria, nome_categoria
@@ -11,7 +11,7 @@ from controle_financeiro.ui.paginas.base import Pagina
 
 
 class PainelLancamento(QWidget):
-    """Lista de receitas ou despesas. Despesas têm o campo Recorrente."""
+    """Lista de receitas ou despesas. Despesas têm categoria e o campo Recorrente."""
 
     def __init__(self, pagina, tabela, titulo, singular, com_recorrente=False):
         super().__init__()
@@ -23,11 +23,13 @@ class PainelLancamento(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
         cabecalho = QHBoxLayout()
+        cabecalho.setSpacing(10)
         rotulo = QLabel(titulo)
         rotulo.setObjectName("secao")
         cabecalho.addWidget(rotulo)
         cabecalho.addStretch()
         apagar = QPushButton("Apagar")
+        apagar.setToolTip("Apagar a linha selecionada (Delete)")
         apagar.clicked.connect(self.apagar)
         add = QPushButton(f"Nova {singular}")
         add.setObjectName("primario")
@@ -36,20 +38,23 @@ class PainelLancamento(QWidget):
         cabecalho.addWidget(add)
         lay.addLayout(cabecalho)
         colunas = ["Descrição", "Valor"] + (["Categoria", "Recorrente"] if com_recorrente else []) + ["Lançado em"]
-        self.tab = nova_tabela(colunas)
-        self.tab.doubleClicked.connect(lambda _i: self.editar())
-        lay.addWidget(self.tab)
+        self.tab = nova_tabela(
+            colunas, f"Nenhuma {singular} neste mês.\nClique em Nova {singular} para lançar a primeira.")
+        self.tab.ao_editar(self.editar)
+        self.tab.ao_apagar(self.apagar)
+        lay.addWidget(self.tab, 1)
         self.total = QLabel()
-        self.total.setObjectName("rotulo")
+        self.total.setObjectName("total")
         lay.addWidget(self.total)
 
     def _campos(self, descricao="", valor="", recorrente=False, categoria_id=None):
+        exemplo = "Ex.: Aluguel" if self.com_recorrente else "Ex.: Salário"
         campos = [
-            ("descricao", "Descrição", texto(descricao, "Ex.: Salário")),
+            ("descricao", "Descrição", texto(descricao, exemplo)),
             ("valor", "Valor", texto(valor, "R$ 0,00")),
         ]
         if self.com_recorrente:
-            campos.append(("categoria", "Categoria", combo(categorias_opcoes(), nome_categoria(categoria_id)))) 
+            campos.append(("categoria", "Categoria", combo(categorias_opcoes(), nome_categoria(categoria_id))))
             caixa = QCheckBox("Recorrente: permanece no próximo mês")
             caixa.setChecked(recorrente)
             campos.append(("recorrente", "", caixa))
@@ -82,7 +87,7 @@ class PainelLancamento(QWidget):
                 itens.append((-(i + 1), v))
                 total += valor
         preencher(self.tab, itens + [(l["id"], valores(l)) for l in linhas])
-        rotulo = "Total de despesas (inclui meu cartão)" if self.tabela == "despesas" else "Total"
+        rotulo = "Total de despesas (inclui meu cartão)" if self.tabela == "despesas" else "Total de receitas"
         self.total.setText(f"{rotulo}: {brl(total)}")
 
     def editar(self):
@@ -90,7 +95,7 @@ class PainelLancamento(QWidget):
         if id_ is not None and id_ < 0:
             QMessageBox.information(
                 self, "Cartão",
-                "O valor do cartão vem das compras. Para mudar, edite a compra na aba Cartões.")
+                "O valor do cartão vem das compras. Para mudar, edite a compra na página Transações.")
             return
         l = fin().obter_lancamento(self.tabela, id_) if id_ is not None else None
         if not l:
@@ -126,27 +131,47 @@ class PainelLancamento(QWidget):
         id_ = selecionado(self.tab)
         if id_ is not None and id_ < 0:
             QMessageBox.information(
-                self, "Cartão", "Os cartões não se apagam por aqui. Apague as compras na aba Cartões.")
+                self, "Cartão",
+                "Os cartões não se apagam por aqui. Apague as compras na página Transações.")
             return
         if id_ is None:
-            QMessageBox.information(self, "Apagar", "Selecione um lançamento na lista.")
+            QMessageBox.information(self, "Apagar", f"Selecione uma {self.singular} na lista.")
             return
-        if QMessageBox.question(self, "Apagar", "Apagar este lançamento?") != QMessageBox.Yes:
+        l = fin().obter_lancamento(self.tabela, id_)
+        descricao = f"{l['descricao']} ({brl(l['valor'])})" if l else f"esta {self.singular}"
+        if QMessageBox.question(self, "Apagar", f"Apagar {descricao}? "
+                                "Essa ação não pode ser desfeita.") != QMessageBox.Yes:
             return
         fin().apagar_lancamento(self.tabela, id_)
         self.pagina.mudou()
 
 
 class LancamentosPage(Pagina):
+    """Receitas à esquerda e despesas à direita. Em janelas estreitas, uma embaixo da outra."""
+
+    LARGURA_LADO_A_LADO = 860
+
     def __init__(self, janela):
         super().__init__(janela)
-        lay = QHBoxLayout(self)
-        lay.setSpacing(24)
+        self._lay = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
+        self._lay.setContentsMargins(0, 0, 0, 0)
+        self._lay.setSpacing(24)
         self.receitas = PainelLancamento(self, "receitas", "Receitas", "receita")
         self.despesas = PainelLancamento(self, "despesas", "Despesas", "despesa",
                                          com_recorrente=True)
-        lay.addWidget(self.receitas)
-        lay.addWidget(self.despesas)
+        # As despesas têm mais colunas (categoria e recorrente), por isso ficam com mais espaço
+        self._lay.addWidget(self.receitas, 2)
+        self._lay.addWidget(self.despesas, 3)
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        lado_a_lado = self.width() >= self.LARGURA_LADO_A_LADO
+        direcao = QBoxLayout.Direction.LeftToRight if lado_a_lado else QBoxLayout.Direction.TopToBottom
+        if self._lay.direction() != direcao:
+            self._lay.setDirection(direcao)
+
+    def novo(self):
+        self.despesas.adicionar()
 
     def atualizar(self):
         self.receitas.atualizar()

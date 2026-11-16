@@ -1,7 +1,7 @@
 """Importação de extrato (CSV ou OFX): arraste o arquivo ou escolha no computador,
 confira cada linha e só então grave."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QLineEdit,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QHeaderView,
                                QLabel, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
                                QVBoxLayout)
 from controle_financeiro.dados.contexto import fin
@@ -46,10 +46,8 @@ class ImportarPage(Pagina):
         super().__init__(janela)
         self.itens = []
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(12)
-        titulo = QLabel("Importar extrato")
-        titulo.setObjectName("secao")
-        lay.addWidget(titulo)
         self.zona = ZonaArrastar(self._carregar, self.escolher)
         lay.addWidget(self.zona)
 

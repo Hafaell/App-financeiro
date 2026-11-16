@@ -18,3 +18,7 @@ class Pagina(QWidget):
 
     def atualizar(self):
         pass
+
+    def novo(self):
+        """Ctrl+N. Cada página abre o seu lançamento; as que não têm um abrem Nova compra."""
+        self.janela.cartoes.nova()

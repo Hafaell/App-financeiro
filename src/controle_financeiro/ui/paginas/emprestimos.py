@@ -1,6 +1,6 @@
 """Página Empréstimos: quem deve e os detalhes de cada um."""
 from PySide6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QPushButton,
+    QBoxLayout, QDialog, QHBoxLayout, QLabel, QPushButton,
     QVBoxLayout,
 )
 from controle_financeiro.dados.contexto import fin
@@ -11,11 +11,15 @@ from controle_financeiro.ui.paginas.base import Pagina
 
 
 class DevePage(Pagina):
-    """Empréstimos: quanto cada pessoa deve no mês, e o detalhe de cada empréstimo."""
+    """Empréstimos: quanto cada pessoa deve no mês, e o detalhe de cada empréstimo.
+    As duas listas ficam lado a lado; em janelas estreitas, uma embaixo da outra."""
+
+    LARGURA_LADO_A_LADO = 860
 
     def __init__(self, janela):
         super().__init__(janela)
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(18)
 
         # Linha de números do mês
@@ -29,7 +33,7 @@ class DevePage(Pagina):
             numeros.addWidget(k)
         lay.addLayout(numeros)
 
-        corpo = QHBoxLayout()
+        corpo = self._corpo = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         corpo.setSpacing(24)
 
         # Lado esquerdo: uma linha por pessoa
@@ -38,7 +42,9 @@ class DevePage(Pagina):
         rotulo_pessoas = QLabel("Quem te deve")
         rotulo_pessoas.setObjectName("secao")
         esquerda.addWidget(rotulo_pessoas)
-        self.tab = nova_tabela(["Pessoa", "Emprestado", "Já pago", "Em aberto"])
+        self.tab = nova_tabela(
+            ["Pessoa", "Emprestado", "Já pago", "Em aberto"],
+            "Ninguém te deve neste mês.\nUm empréstimo é uma compra lançada com a pessoa preenchida.")
         self.tab.itemSelectionChanged.connect(self._detalhar)
         esquerda.addWidget(self.tab, 1)
         corpo.addLayout(esquerda, 2)
@@ -53,12 +59,14 @@ class DevePage(Pagina):
         cabecalho.addStretch()
         self.botao_pagar = QPushButton("Registrar pagamento")
         self.botao_pagar.setObjectName("primario")
+        self.botao_pagar.setToolTip("Ctrl+N")
         self.botao_pagar.clicked.connect(self.pagamento)
         cabecalho.addWidget(self.botao_pagar)
         direita.addLayout(cabecalho)
-        self.det = nova_tabela(["Item", "Mês", "Cartão", "Parcelas", "Valor", "Lançado em"])
+        self.det = nova_tabela(["Item", "Mês", "Cartão", "Parcelas", "Valor", "Lançado em"],
+                               "Selecione uma pessoa na lista ao lado para ver os empréstimos dela.")
         self.det.setItemDelegateForColumn(2, BalaoCartao(self.det))
-        self.det.doubleClicked.connect(lambda _i: self.editar_emprestimo())
+        self.det.ao_editar(self.editar_emprestimo)
         direita.addWidget(self.det, 1)
         ajuda = QLabel("Dê duplo clique em um empréstimo para editar.")
         ajuda.setObjectName("rotulo")
@@ -66,6 +74,13 @@ class DevePage(Pagina):
         corpo.addLayout(direita, 3)
 
         lay.addLayout(corpo, 1)
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        lado_a_lado = self.width() >= self.LARGURA_LADO_A_LADO
+        direcao = QBoxLayout.Direction.LeftToRight if lado_a_lado else QBoxLayout.Direction.TopToBottom
+        if self._corpo.direction() != direcao:
+            self._corpo.setDirection(direcao)
 
     def atualizar(self):
         r = self.tab.currentRow()
@@ -77,11 +92,10 @@ class DevePage(Pagina):
         preencher(self.tab, [
             (i, [d["pessoa"], brl(d["emprestado"]), brl(d["ja_pago"]), brl(d["em_aberto"])])
             for i, d in enumerate(dados)])
-        if pessoa_sel:
-            for i, d in enumerate(dados):
-                if d["pessoa"] == pessoa_sel:
-                    self.tab.selectRow(i)
-                    break
+        # Mantém a pessoa que estava selecionada; sem seleção, já abre a primeira da lista
+        linha = next((i for i, d in enumerate(dados) if d["pessoa"] == pessoa_sel), 0)
+        if dados:
+            self.tab.selectRow(linha)
         self._detalhar()
 
     def _detalhar(self):
@@ -96,6 +110,9 @@ class DevePage(Pagina):
             (c["id"], [c["item"], fin().nome_mes(c["mes"]), c["cartao"], _parcela_exibida(c),
                        brl(c["valor_parcela"]), data_br(c.get("data_lancamento"))])
             for c in fin().emprestimos_de(pessoa, self.mes())], cartao_col=2)
+
+    def novo(self):
+        self.pagamento()
 
     def editar_emprestimo(self):
         id_ = selecionado(self.det)

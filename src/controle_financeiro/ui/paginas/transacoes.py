@@ -21,15 +21,18 @@ class CartoesPage(Pagina):
     def __init__(self, janela):
         super().__init__(janela)
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(14)
         barra = QHBoxLayout()
         self.filtro = combo([])
         self.filtro.setMinimumWidth(190)
         self.filtro.currentIndexChanged.connect(self._filtro_mudou)
         apagar = QPushButton("Apagar selecionada")
+        apagar.setToolTip("Delete")
         apagar.clicked.connect(self.apagar)
         nova = QPushButton("Nova compra")
         nova.setObjectName("primario")
+        nova.setToolTip("Ctrl+N")
         nova.clicked.connect(self.nova)
         barra.addWidget(self.filtro)
         barra.addStretch()
@@ -40,16 +43,18 @@ class CartoesPage(Pagina):
         barra.addWidget(nova)
         lay.addLayout(barra)
         self.busca = QLineEdit()
-        self.busca.setPlaceholderText("Buscar nesta tabela: digite o nome do item, pessoa ou categoria")
+        self.busca.setPlaceholderText("Buscar nesta tabela: digite o nome do item, pessoa ou categoria (Ctrl+F)")
         self.busca.setClearButtonEnabled(True)
         self.busca.textChanged.connect(self._aplicar_busca)
         lay.addWidget(self.busca)
-        self.tab = nova_tabela(self.COLUNAS)
+        self.tab = nova_tabela(
+            self.COLUNAS, "Nenhuma compra neste mês.\nClique em Nova compra para lançar a primeira.")
         self.tab.setItemDelegateForColumn(0, BalaoCartao(self.tab))
-        self.tab.doubleClicked.connect(lambda _i: self.editar())
-        lay.addWidget(self.tab)
+        self.tab.ao_editar(self.editar)
+        self.tab.ao_apagar(self.apagar)
+        lay.addWidget(self.tab, 1)
         self.totais = QLabel()
-        self.totais.setObjectName("rotulo")
+        self.totais.setObjectName("total")
         lay.addWidget(self.totais)
 
     def _recarregar_filtro(self, escolhido=None):
@@ -104,16 +109,21 @@ class CartoesPage(Pagina):
     def _aplicar_busca(self, *_):
         """Mostra só as linhas em que algum campo contém o texto digitado (sem diferenciar maiúsculas)."""
         termo = self.busca.text().strip().lower()
+        self.tab.vazio_busca = f"Nenhuma compra deste mês contém “{self.busca.text().strip()}”."
         for linha in range(self.tab.rowCount()):
             textos = [self.tab.item(linha, c).text().lower() for c in range(self.tab.columnCount())
                       if self.tab.item(linha, c) is not None]
             self.tab.setRowHidden(linha, bool(termo) and not any(termo in x for x in textos))
+        self.tab.viewport().update()
 
     def editar(self):
         id_ = selecionado(self.tab)
         c = fin().obter_compra(id_) if id_ is not None else None
         if c and dialogo_compra(self, c):
             self.mudou()
+
+    def novo(self):
+        self.nova()
 
     def nova(self):
         dlg = Formulario(self, "Nova compra no cartão", campos_compra())
@@ -136,8 +146,10 @@ class CartoesPage(Pagina):
         if id_ is None:
             QMessageBox.information(self, "Apagar compra", "Selecione uma compra na lista.")
             return
+        c = fin().obter_compra(id_)
+        descricao = f"{c['item']} ({c['cartao']}, {brl(c['valor_parcela'])})" if c else "esta compra"
         if QMessageBox.question(self, "Apagar compra",
-                                "Apagar esta compra? Essa ação não pode ser desfeita.") != QMessageBox.Yes:
+                                f"Apagar {descricao}? Essa ação não pode ser desfeita.") != QMessageBox.Yes:
             return
         fin().apagar_compra(id_)
         self.mudou()

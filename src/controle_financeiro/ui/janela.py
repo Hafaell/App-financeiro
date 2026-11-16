@@ -1,16 +1,20 @@
-"""Janela principal: menu, mês, conta e atualização automática."""
+"""Janela principal: menu em seções, mês, conta, atalhos e atualização automática."""
 from datetime import datetime
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QSettings, QTimer, Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel,
-    QListWidget, QMainWindow, QMessageBox, QPushButton,
+    QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QMainWindow, QMessageBox, QPushButton, QScrollArea,
     QStackedWidget, QStatusBar, QVBoxLayout, QWidget,
 )
+from controle_financeiro.config import PASTA
 from controle_financeiro.dados.contexto import auth, fin
-from controle_financeiro.ui.componentes import carregar_cores
+from controle_financeiro.ui.componentes import MenuLateral, carregar_cores
 from controle_financeiro.ui.dialogos import ContaDialog, GerenciarMeses, Login
+from controle_financeiro.ui.paginas.caixinhas import CaixinhasPage
 from controle_financeiro.ui.paginas.emprestimos import DevePage
+from controle_financeiro.ui.paginas.lancamentos import LancamentosPage
 from controle_financeiro.ui.paginas.planejamento import PlanejamentoPage
 from controle_financeiro.ui.paginas.comparativo import ComparativoPage
 from controle_financeiro.ui.importacao_ui import ImportarPage
@@ -19,12 +23,13 @@ from controle_financeiro.ui.ferramentas_ui import BuscaDialog, BackupDialog, Dat
 from controle_financeiro.ui.paginas.transacoes import CartoesPage
 from controle_financeiro.ui.paginas.visao import VisaoPage
 from controle_financeiro.ui.seletor_mes import MesSeletor
-
+from controle_financeiro.ui.tema import AMARELO_TEXTO, TEXTO_SUAVE, VERDE_TEXTO
 
 class Janela(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Controle Financeiro")
+        self.setMinimumSize(1060, 680)
         self.resize(1240, 800)
 
         raiz = QWidget()
@@ -32,7 +37,7 @@ class Janela(QMainWindow):
         linha.setContentsMargins(0, 0, 0, 0)
         linha.setSpacing(0)
 
-        # Lateral azul com a marca e o menu
+        # Lateral azul com a marca, o menu em seções e a conta
         lateral = QWidget()
         lateral.setObjectName("lateral")
         lateral.setFixedWidth(230)
@@ -41,49 +46,42 @@ class Janela(QMainWindow):
         sl.setSpacing(0)
         marca = QLabel("Controle\nFinanceiro")
         marca.setObjectName("marca")
-        self.menu = QListWidget()
-        self.menu.setObjectName("menu")
+        self.menu = MenuLateral()
+        rolagem_menu = QScrollArea()  # em janelas baixas o menu rola, sem esconder a conta
+        rolagem_menu.setWidgetResizable(True)
+        rolagem_menu.setFrameShape(QFrame.Shape.NoFrame)
+        rolagem_menu.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        rolagem_menu.setWidget(self.menu)
         sl.addWidget(marca)
-        sl.addWidget(self.menu, 1)
-
-        conta = QWidget()
-        conta.setObjectName("conta")
-        cl = QVBoxLayout(conta)
-        cl.setContentsMargins(18, 14, 18, 18)
-        cl.setSpacing(8)
-        rotulo_conta = QLabel("Conectado como")
-        rotulo_conta.setObjectName("contaRotulo")
-        self.conta_nome = QLabel(auth().nome_exibicao())
-        self.conta_nome.setObjectName("contaNome")
-        conta_btn = QPushButton("Minha conta")
-        conta_btn.setObjectName("contaBtn")
-        conta_btn.clicked.connect(self.abrir_conta)
-        trocar = QPushButton("Trocar usuário")
-        trocar.setObjectName("contaBtn")
-        trocar.clicked.connect(self.trocar_usuario)
-        sair = QPushButton("Sair")
-        sair.setObjectName("contaBtn")
-        sair.clicked.connect(self.sair)
-        cl.addWidget(rotulo_conta)
-        cl.addWidget(self.conta_nome)
-        cl.addWidget(conta_btn)
-        cl.addWidget(trocar)
-        cl.addWidget(sair)
-        sl.addWidget(conta)
+        sl.addWidget(rolagem_menu, 1)
+        sl.addWidget(self._montar_conta())
 
         self.paginas = QStackedWidget()
         self.visao = VisaoPage(self)
         self.cartoes = CartoesPage(self)
-        self.deve = DevePage(self)
+        self.lancamentos = LancamentosPage(self)
         self.planejamento = PlanejamentoPage(self)
         self.comparativo = ComparativoPage(self)
+        self.deve = DevePage(self)
+        self.caixinhas = CaixinhasPage(self)
         self.importar = ImportarPage(self)
         self.ferramentas = FerramentasPage(self)
-        for nome, pagina in [("Visão geral", self.visao), ("Transações", self.cartoes),
-                             ("Empréstimos", self.deve), ("Planejamento", self.planejamento), ("Comparativo", self.comparativo),
-                             ("Importar extrato", self.importar), ("Ferramentas", self.ferramentas)]:
-            self.menu.addItem(nome)
-            self.paginas.addWidget(pagina)
+        # Geral: o dia a dia do mês. Pessoal: o que é só seu (quem te deve, o que você guarda).
+        # Sistema: entrada de dados em lote e manutenção do app.
+        secoes = [
+            ("Geral", [("Visão geral", self.visao), ("Transações", self.cartoes),
+                       ("Receitas e despesas", self.lancamentos),
+                       ("Planejamento", self.planejamento), ("Comparativo", self.comparativo)]),
+            ("Pessoal", [("Empréstimos", self.deve), ("Caixinhas", self.caixinhas)]),
+            ("Sistema", [("Importar extrato", self.importar), ("Ferramentas", self.ferramentas)]),
+        ]
+        for secao, itens in secoes:
+            self.menu.secao(secao)
+            for nome, pagina in itens:
+                indice = self.menu.item(nome, f"Ctrl+{self.paginas.count() + 1}")
+                self.paginas.addWidget(pagina)
+                QShortcut(QKeySequence(f"Ctrl+{indice + 1}"), self,
+                          lambda i=indice: self.menu.selecionar(i))
 
         area = QWidget()
         col = QVBoxLayout(area)
@@ -93,11 +91,6 @@ class Janela(QMainWindow):
         self.titulo = QLabel()
         self.titulo.setObjectName("titulo")
         self.seletor = MesSeletor()
-        self.botao_meses = QPushButton("Meses")
-        self.botao_meses.clicked.connect(self.gerenciar_meses)
-        self.botao_virar = QPushButton("Virar o mês")
-        self.botao_virar.setObjectName("primario")
-        self.botao_virar.clicked.connect(self.virar_mes)
         topo.addWidget(self.titulo)
         topo.addStretch()
         topo.addWidget(self.seletor)
@@ -115,16 +108,76 @@ class Janela(QMainWindow):
         self.statusBar().hide()
         self.barra_estado.addPermanentWidget(self.estado_label)
 
+        QShortcut(QKeySequence("Ctrl+N"), self, self.novo)
+        QShortcut(QKeySequence("Ctrl+F"), self, self.buscar)
+        QShortcut(QKeySequence("F5"), self, self.atualizar_tudo)
+        QShortcut(QKeySequence("Alt+Left"), self, self.seletor.anterior)
+        QShortcut(QKeySequence("Alt+Right"), self, self.seletor.proximo)
+
         self.seletor.mudou.connect(self.atualizar_tudo)
-        self.menu.currentRowChanged.connect(self._trocar)
+        self.menu.mudou.connect(self._trocar)
         self._versao = None
         self._desatualizadas = set()
-        self.menu.setCurrentRow(0)
+        self.menu.selecionar(0)
 
+        self._restaurar_janela()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._verificar)
         self.timer.start(1500)
         self.atualizar_tudo()
+
+    def _montar_conta(self):
+        """Rodapé da lateral: quem está conectado e as ações da conta."""
+        conta = QWidget()
+        cl = QVBoxLayout(conta)
+        cl.setContentsMargins(18, 0, 18, 16)
+        cl.setSpacing(6)
+        divisor = QFrame()
+        divisor.setObjectName("contaLinha")
+        divisor.setFixedHeight(1)
+        rotulo_conta = QLabel("Conectado como")
+        rotulo_conta.setObjectName("contaRotulo")
+        self.conta_nome = QLabel(auth().nome_exibicao())
+        self.conta_nome.setObjectName("contaNome")
+        conta_btn = QPushButton("Minha conta")
+        conta_btn.setObjectName("contaBtn")
+        conta_btn.clicked.connect(self.abrir_conta)
+        trocar = QPushButton("Trocar usuário")
+        sair = QPushButton("Sair")
+        for botao, acao in ((trocar, self.trocar_usuario), (sair, self.sair)):
+            botao.setObjectName("contaLink")
+            botao.setCursor(Qt.CursorShape.PointingHandCursor)
+            botao.clicked.connect(acao)
+        links = QHBoxLayout()
+        links.setContentsMargins(0, 2, 0, 0)
+        links.addWidget(trocar)
+        links.addStretch()
+        links.addWidget(sair)
+        cl.addWidget(divisor)
+        cl.addSpacing(8)
+        cl.addWidget(rotulo_conta)
+        cl.addWidget(self.conta_nome)
+        cl.addSpacing(4)
+        cl.addWidget(conta_btn)
+        cl.addLayout(links)
+        return conta
+
+    # ----- tamanho e posição da janela (lembrados entre uma abertura e outra) -----
+
+    @staticmethod
+    def _preferencias():
+        return QSettings(str(PASTA / "janela.ini"), QSettings.Format.IniFormat)
+
+    def _restaurar_janela(self):
+        geometria = self._preferencias().value("geometria")
+        if geometria:
+            self.restoreGeometry(geometria)
+
+    def closeEvent(self, evento):
+        self._preferencias().setValue("geometria", self.saveGeometry())
+        super().closeEvent(evento)
+
+    # ----- conta -----
 
     def trocar_usuario(self):
         atual = auth().usuario_logado()
@@ -164,6 +217,24 @@ class Janela(QMainWindow):
         self.conta_nome.setText(auth().nome_exibicao())
         self.seletor.recarregar()
         self.atualizar_tudo()
+
+    # ----- atalhos e ferramentas -----
+
+    def ir_para(self, pagina):
+        """Abre uma página pelo menu (usado pelos cards da Visão geral)."""
+        self.menu.selecionar(self.paginas.indexOf(pagina))
+
+    def novo(self):
+        """Ctrl+N: novo lançamento da página aberta."""
+        self.paginas.currentWidget().novo()
+
+    def buscar(self):
+        """Ctrl+F: em Transações filtra a tabela; nas outras páginas busca em todos os meses."""
+        if self.paginas.currentWidget() is self.cartoes:
+            self.cartoes.busca.setFocus()
+            self.cartoes.busca.selectAll()
+        else:
+            self.abrir_busca()
 
     def abrir_busca(self):
         BuscaDialog(self).exec()
@@ -215,9 +286,11 @@ class Janela(QMainWindow):
         self.seletor.recarregar()
         self.atualizar_tudo()
 
+    # ----- páginas e atualização -----
+
     def _trocar(self, indice):
         self.paginas.setCurrentIndex(indice)
-        self.titulo.setText(self.menu.item(indice).text())
+        self.titulo.setText(self.menu.nome(indice))
         if indice in self._desatualizadas:  # só carrega a página quando ela é aberta
             self._atualizar_pagina(indice)
 
@@ -237,18 +310,18 @@ class Janela(QMainWindow):
         """Aviso no canto da tela: se os dados estão sincronizados com o Supabase."""
         e = fin().banco.estado()
         if e["tipo"] == "local":
-            texto, cor = "● Banco local", "#6B7A99"
+            texto, cor = "● Banco local", TEXTO_SUAVE
         elif e.get("sessao_expirada"):
             texto = (f"● Sessão expirada: feche e entre de novo para sincronizar · "
                      f"{e['pendentes']} aguardando envio")
             cor = "#B42318"
         elif not e["online"]:
             texto = f"● Sem conexão: usando a cópia salva · {e['pendentes']} aguardando envio"
-            cor = "#B07A00"
+            cor = AMARELO_TEXTO
         elif e["pendentes"]:
-            texto, cor = f"● Enviando {e['pendentes']} alteração(ões)…", "#B07A00"
+            texto, cor = f"● Enviando {e['pendentes']} alteração(ões)…", AMARELO_TEXTO
         else:
-            texto, cor = "● Sincronizado com o Supabase", "#1E7A4A"
+            texto, cor = "● Sincronizado com o Supabase", VERDE_TEXTO
         if e["falhas"]:
             texto += f" · {e['falhas']} não enviada(s)"
         self.estado_label.setText(texto)
@@ -265,7 +338,3 @@ class Janela(QMainWindow):
             self.atualizar_tudo()
             self.barra_estado.showMessage(f"Atualizado às {datetime.now():%H:%M}", 5000)
         self._atualizar_estado()
-
-
-def _metodos_ferramentas():
-    pass

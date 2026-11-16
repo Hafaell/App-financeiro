@@ -47,6 +47,16 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 - **Multiusuário no Supabase:** todos os usuários compartilham as mesmas tabelas; cada linha tem `user_id` e o RLS isola os dados.
 - **Dados locais** (chave, conexão, sessão) ficam criptografados em `%LOCALAPPDATA%\ControleFinanceiro` (`config.py`, `seguranca/cofre.py`), nunca no projeto.
 
+## Interface (`ui/`)
+
+- **Menu lateral em seções**, definido na lista `secoes` de `ui/janela.py`: **Geral** (Visão geral, Transações, Receitas e despesas, Planejamento, Comparativo), **Pessoal** (Empréstimos, Caixinhas) e **Sistema** (Importar extrato, Ferramentas). Critério: Geral é o dia a dia do mês; Pessoal é o que é só do usuário (quem deve a ele, o que ele guarda); Sistema é entrada em lote e manutenção. Página nova entra nessa lista e ganha `Ctrl+número` sozinha.
+- **Visão geral não tem listas:** só os números do mês, o orçamento e os botões de lançar. Receitas e despesas e Caixinhas têm páginas próprias (`paginas/lancamentos.py`, `paginas/caixinhas.py`).
+- **Tabelas:** use `nova_tabela(colunas, vazio)` de `ui/componentes.py` (classe `Tabela`). Ela ajusta as colunas ao conteúdo, mostra o texto `vazio` quando não há linhas e liga `Enter`/duplo clique e `Delete` por `ao_editar()` e `ao_apagar()`.
+- **Atalhos:** ligados em `ui/janela.py`; cada página responde ao `Ctrl+N` pelo método `novo()` (`paginas/base.py`). Ao mudar um atalho, atualize a lista `ATALHOS` em `paginas/ferramentas.py` e o README.
+- **Estilo:** cores e folha de estilo só em `ui/tema.py` (evite `setStyleSheet` solto nas páginas). Um `QWidget` puro dentro de um card precisa de `setObjectName("transparente")`, senão pinta o fundo da janela.
+- **Conferir no visual:** `tests/test_interface.py` monta a janela com `QT_QPA_PLATFORM=offscreen` e SQLite; o mesmo caminho serve para salvar retratos das páginas com `janela.grab()`.
+- **Skills do projeto** (`.claude/skills/`, versões em `skills-lock.json`): `find-skills` (busca skills com `npx skills find`) e `frontend-design` (diretrizes de design, usadas no layout).
+
 ## Servidor MCP e skill assistente-financeiro
 
 Cada `@mcp.tool()` em `servidor_claude/servidor.py` é uma ferramenta do Claude Desktop; ao criar ou alterar uma, o servidor precisa ser reiniciado. Categorias e cartões são passados por **nome** nas ferramentas (`_id_da_categoria` converte para id).
