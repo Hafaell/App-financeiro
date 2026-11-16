@@ -19,7 +19,8 @@ from controle_financeiro.ui.paginas.planejamento import PlanejamentoPage
 from controle_financeiro.ui.paginas.comparativo import ComparativoPage
 from controle_financeiro.ui.importacao_ui import ImportarPage
 from controle_financeiro.ui.paginas.ferramentas import FerramentasPage
-from controle_financeiro.ui.ferramentas_ui import BuscaDialog, BackupDialog, DatasCartoesDialog, gerar_relatorio_pdf
+from controle_financeiro.ui.ferramentas_ui import (BackupDialog, BuscaDialog, CopiasDialog, DatasCartoesDialog,
+                                                  gerar_relatorio_pdf)
 from controle_financeiro.ui.paginas.transacoes import CartoesPage
 from controle_financeiro.ui.paginas.visao import VisaoPage
 from controle_financeiro.ui.seletor_mes import MesSeletor
@@ -123,11 +124,32 @@ class Janela(QMainWindow):
         self.setCentralWidget(raiz)
         self.estado_label = QLabel()
         self.statusBar().hide()
+        # Aviso "apagado, desfazer?" (fica à direita, junto do estado, para mensagens não o esconderem)
+        self.aviso_desfazer = QWidget()
+        self.aviso_desfazer.setObjectName("transparente")
+        ad = QHBoxLayout(self.aviso_desfazer)
+        ad.setContentsMargins(0, 0, 16, 0)
+        ad.setSpacing(6)
+        self.texto_desfazer = QLabel()
+        self.texto_desfazer.setObjectName("rotulo")
+        botao_desfazer = QPushButton("Desfazer (Ctrl+Z)")
+        botao_desfazer.setObjectName("desfazer")
+        botao_desfazer.setCursor(Qt.CursorShape.PointingHandCursor)
+        botao_desfazer.clicked.connect(self.desfazer)
+        ad.addWidget(self.texto_desfazer)
+        ad.addWidget(botao_desfazer)
+        self.aviso_desfazer.hide()
+        self._acao_desfazer = None
+        self._timer_desfazer = QTimer(self)
+        self._timer_desfazer.setSingleShot(True)
+        self._timer_desfazer.timeout.connect(self._esquecer_desfazer)
+        self.barra_estado.addPermanentWidget(self.aviso_desfazer)
         self.barra_estado.addPermanentWidget(self.estado_label)
 
         QShortcut(QKeySequence("Ctrl+N"), self, self.novo)
         QShortcut(QKeySequence("Ctrl+F"), self, self.buscar)
         QShortcut(QKeySequence("F5"), self, self.atualizar_tudo)
+        QShortcut(QKeySequence("Ctrl+Z"), self, self.desfazer)
         QShortcut(QKeySequence("Alt+Left"), self, self.seletor.anterior)
         QShortcut(QKeySequence("Alt+Right"), self, self.seletor.proximo)
 
@@ -258,6 +280,39 @@ class Janela(QMainWindow):
 
     def abrir_backup(self):
         BackupDialog(self).exec()
+
+    def oferecer_desfazer(self, texto, acao, segundos=30):
+        """Depois de apagar: mostra o aviso com o botão Desfazer por alguns segundos."""
+        self._acao_desfazer = acao
+        self.texto_desfazer.setText(texto)
+        self.aviso_desfazer.show()
+        self._timer_desfazer.start(segundos * 1000)
+
+    def _esquecer_desfazer(self):
+        self._acao_desfazer = None
+        self.aviso_desfazer.hide()
+
+    def desfazer(self):
+        """Ctrl+Z: volta o último lançamento apagado."""
+        acao = self._acao_desfazer
+        self._esquecer_desfazer()
+        if acao is None:
+            self.barra_estado.showMessage("Nada para desfazer.", 3000)
+            return
+        try:
+            acao()
+        except ValueError as e:
+            QMessageBox.warning(self, "Não consegui desfazer", str(e))
+            return
+        self.atualizar_tudo()
+        self.barra_estado.showMessage("Exclusão desfeita.", 4000)
+
+    def abrir_copias(self):
+        dialogo = CopiasDialog(self)
+        dialogo.exec()
+        if dialogo.restaurou:
+            self.seletor.recarregar()
+            self.atualizar_tudo()
 
     def abrir_datas(self):
         DatasCartoesDialog(self).exec()

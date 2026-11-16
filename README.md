@@ -24,7 +24,7 @@ O menu lateral tem três seções:
 - **Sistema:** Importar extrato e Ferramentas.
 
 Atalhos do teclado: `Ctrl+1` a `Ctrl+9` abrem cada item do menu, `Ctrl+N` cria um lançamento na
-página aberta, `Ctrl+F` busca, `Enter` edita e `Delete` apaga a linha selecionada, `Alt+←` e
+página aberta, `Ctrl+F` busca, `Enter` edita e `Delete` apaga a linha selecionada, `Ctrl+Z` desfaz a última exclusão, `Alt+←` e
 `Alt+→` trocam o mês e `F5` atualiza os dados. A lista também aparece em Ferramentas.
 
 ## Estrutura

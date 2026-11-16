@@ -133,6 +133,9 @@ QPushButton#primario:hover {{ background: {PRIMARIA_ESCURA}; border-color: {PRIM
 QPushButton#primario:focus {{ border-color: {TINTA}; }}
 QPushButton#primario:pressed {{ background: {TINTA}; }}
 QPushButton#perigo {{ color: {VERMELHO_TEXTO}; }}
+QPushButton#desfazer {{ background: transparent; border: none; color: {PRIMARIA}; padding: 2px 6px;
+                       text-decoration: underline; }}
+QPushButton#desfazer:hover {{ background: {PRIMARIA_CLARA}; }}
 QPushButton#perigo:hover {{ background: #FDF0EE; border-color: {VERMELHO_TEXTO}; color: {VERMELHO_TEXTO}; }}
 
 /* ---------- campos ---------- */

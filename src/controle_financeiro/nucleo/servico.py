@@ -94,6 +94,32 @@ class Financas:
     def atualizar_compra(self, *args, **kwargs):
         return self.compras.atualizar(*args, **kwargs)
 
+    def listar_backups(self):
+        return self.ferramentas.listar_backups(self.pasta_backups)
+
+    def restaurar_backup(self, caminho):
+        """Volta todos os dados para os de uma cópia automática. Antes, salva uma cópia do
+        estado atual (para dar para voltar atrás). Devolve o caminho dessa cópia nova."""
+        from controle_financeiro.nucleo.ferramentas import ler_backup_automatico
+        try:
+            dados = ler_backup_automatico(caminho)
+        except Exception as erro:
+            raise ValueError(f"Não consegui abrir a cópia: {erro}") from erro
+        estado = self.banco.estado()
+        if estado["tipo"] != "local" and not estado["online"]:
+            raise ValueError("Sem conexão com o Supabase. Conecte-se à internet para restaurar.")
+        try:
+            atual = self.ferramentas.backup_automatico(self.pasta_backups, "antes-de-restaurar")
+        except Exception as erro:
+            raise ValueError("Não consegui salvar a cópia de segurança dos dados atuais, então nada "
+                             f"foi restaurado. Motivo: {erro}") from erro
+        self.ferramentas.restaurar(dados)
+        return str(atual)
+
+    def recolocar(self, tabela, linha):
+        """Desfaz a exclusão de uma compra, receita ou despesa (grava de novo, com o mesmo id)."""
+        return self.ferramentas.recolocar(tabela, linha)
+
     def editar_compra(self, id_, **campos):
         return self.compras.editar(id_, **campos)
 

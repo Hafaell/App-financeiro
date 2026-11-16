@@ -124,7 +124,8 @@ def _sql_para_envio(op):
     sql, args = op["sql"], list(op["args"])
     if op["tabela"] == "sessoes" and sql.upper().startswith("INSERT"):
         sql = sql + " ON CONFLICT DO NOTHING"
-    elif op.get("id") is not None and op["tabela"] in TABELAS_COM_ID and "ON CONFLICT" not in sql.upper():
+    elif (op.get("id") is not None and op["tabela"] in TABELAS_COM_ID and "ON CONFLICT" not in sql.upper()
+          and not re.match(r"INSERT INTO \w+ \(id,", sql)):  # o comando já traz o id (restaurar, desfazer)
         sql = re.sub(r"INSERT INTO (\w+) \(([^)]*)\) VALUES \(",
                      lambda m: f"INSERT INTO {m.group(1)} (id, {m.group(2)}) VALUES (?, ", sql, count=1)
         args = [op["id"]] + args

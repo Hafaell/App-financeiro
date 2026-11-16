@@ -188,3 +188,82 @@ def test_editar_compra_recusa_campo_desconhecido_e_id_inexistente():
     id_ = app.lancar_compra(cartao, "Livro", "R$ 50,00", parcelas="", pessoa=".")
     with pytest.raises(ValueError):
         app.editar_compra(id_, mes="2020-01")
+
+
+# ----- restaurar uma cópia e desfazer exclusão -----
+
+def _banco_proprio(tmp_path):
+    """Banco SQLite só deste teste: restaurar troca TODOS os dados, então não pode usar o compartilhado."""
+    from controle_financeiro.dados.banco import BancoSqlite
+    return Financas(BancoSqlite(tmp_path / "proprio.db"), pasta_backups=tmp_path / "copias")
+
+
+def test_restaurar_volta_os_dados_da_copia_com_os_mesmos_ids(tmp_path):
+    app = _banco_proprio(tmp_path)
+    cartao = app.listar_cartoes()[0]["nome"]
+    lazer = next(c["id"] for c in app.listar_categorias() if c["nome"] == "Lazer")
+    cinema = app.lancar_compra(cartao, "Cinema", "R$ 40,00", parcelas="", pessoa=".", categoria_id=lazer)
+    app.adicionar_lancamento("receitas", "Salário", "R$ 1.000,00")
+    copia = app.ferramentas.backup_automatico(app.pasta_backups, "antes-da-virada", app.mes_ativo())
+    antes = {t: app.banco.consultar(f"SELECT * FROM {t} ORDER BY 1") for t in ("compras", "receitas", "categorias")}
+
+    app.apagar_compra(cinema)
+    app.lancar_compra(cartao, "Lançada depois", "R$ 5,00", parcelas="", pessoa=".")
+    app.virar_mes()
+    seguranca = app.restaurar_backup(copia)
+
+    depois = {t: app.banco.consultar(f"SELECT * FROM {t} ORDER BY 1") for t in antes}
+    assert depois == antes  # mesmas linhas, mesmos ids, categoria ligada à compra
+    assert len(app.sessoes()) == 1
+    assert app.obter_compra(cinema)["categoria_id"] == lazer
+    assert any(b["caminho"] == seguranca for b in app.listar_backups())  # dá para voltar atrás
+
+
+def test_restaurar_recusa_arquivo_que_nao_e_copia(tmp_path):
+    import pytest
+    app = _banco_proprio(tmp_path)
+    falso = tmp_path / "falso.cfauto"
+    falso.write_bytes(b"qualquer coisa")
+    with pytest.raises(ValueError, match="Não consegui abrir"):
+        app.restaurar_backup(falso)
+
+
+def test_listar_copias_da_mais_nova_para_a_mais_antiga(tmp_path):
+    app = _banco_proprio(tmp_path)
+    app.ferramentas.backup_automatico(app.pasta_backups, "antes-da-virada", "2026-11")
+    app.ferramentas.backup_automatico(app.pasta_backups, "antes-de-restaurar")
+    lista = app.listar_backups()
+    assert len(lista) == 2
+    assert {b["motivo"] for b in lista} == {"Antes da virada de Novembro 26", "Antes de restaurar uma cópia"}
+    assert lista[0]["quando"] >= lista[1]["quando"]
+
+
+def test_desfazer_exclusao_volta_a_compra_igual(tmp_path):
+    app = _banco_proprio(tmp_path)
+    cartao = app.listar_cartoes()[0]["nome"]
+    id_ = app.lancar_compra(cartao, "Celular", "R$ 250,00", parcelas="2/10", pessoa="Benzinho")
+    linha = app.obter_compra(id_)
+    app.apagar_compra(id_)
+    assert app.obter_compra(id_) is None
+    app.recolocar("compras", linha)
+    assert app.obter_compra(id_) == linha
+
+
+def test_desfazer_exclusao_de_despesa_e_receita(tmp_path):
+    app = _banco_proprio(tmp_path)
+    for tabela in ("despesas", "receitas"):
+        id_ = app.adicionar_lancamento(tabela, "Item", "R$ 10,00")
+        linha = app.obter_lancamento(tabela, id_)
+        app.apagar_lancamento(tabela, id_)
+        app.recolocar(tabela, linha)
+        assert app.obter_lancamento(tabela, id_) == linha
+
+
+def test_fila_offline_nao_repete_o_id_quando_o_comando_ja_traz():
+    from controle_financeiro.dados.banco import _sql_para_envio
+    sql, args = _sql_para_envio({"tabela": "compras", "sql": "INSERT INTO compras (id, item) VALUES (?, ?)",
+                                 "args": [7, "X"], "id": 7})
+    assert sql == "INSERT INTO compras (id, item) VALUES (%s, %s)" and args == [7, "X"]
+    sql, args = _sql_para_envio({"tabela": "compras", "sql": "INSERT INTO compras (item) VALUES (?)",
+                                 "args": ["X"], "id": 7})
+    assert sql == "INSERT INTO compras (id, item) VALUES (%s, %s)" and args == [7, "X"]

@@ -149,8 +149,9 @@ class CartoesPage(Pagina):
             return
         c = fin().obter_compra(id_)
         descricao = f"{c['item']} ({c['cartao']}, {brl(c['valor_parcela'])})" if c else "esta compra"
-        if QMessageBox.question(self, "Apagar compra",
-                                f"Apagar {descricao}? Essa ação não pode ser desfeita.") != QMessageBox.Yes:
+        if QMessageBox.question(self, "Apagar compra", f"Apagar {descricao}?") != QMessageBox.Yes:
             return
         fin().apagar_compra(id_)
         self.mudou()
+        if c:
+            self.janela.oferecer_desfazer(f"Compra apagada: {c['item']}.", lambda: fin().recolocar("compras", c))

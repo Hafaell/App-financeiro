@@ -140,11 +140,14 @@ class PainelLancamento(QWidget):
             return
         l = fin().obter_lancamento(self.tabela, id_)
         descricao = f"{l['descricao']} ({brl(l['valor'])})" if l else f"esta {self.singular}"
-        if QMessageBox.question(self, "Apagar", f"Apagar {descricao}? "
-                                "Essa ação não pode ser desfeita.") != QMessageBox.Yes:
+        if QMessageBox.question(self, "Apagar", f"Apagar {descricao}?") != QMessageBox.Yes:
             return
         fin().apagar_lancamento(self.tabela, id_)
         self.pagina.mudou()
+        if l:
+            tabela = self.tabela
+            self.pagina.janela.oferecer_desfazer(f"{self.singular.capitalize()} apagada: {l['descricao']}.",
+                                                 lambda: fin().recolocar(tabela, l))
 
 
 class LancamentosPage(Pagina):

@@ -1,9 +1,9 @@
 """Telas das ferramentas: busca, backup, datas das faturas e relatório em PDF."""
 from datetime import date
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPdfWriter, QPageSize, QPen
-from PySide6.QtWidgets import (QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtCore import QRectF, Qt, QUrl
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QPainter, QPdfWriter, QPageSize, QPen
+from PySide6.QtWidgets import (QApplication, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
                                QMessageBox, QPushButton, QVBoxLayout)
 from controle_financeiro.dados.contexto import fin
 
@@ -90,6 +90,84 @@ class BackupDialog(QDialog):
             return
         QMessageBox.information(self, "Backup", f"Backup salvo em:\n{caminho}")
         self.accept()
+
+
+class CopiasDialog(QDialog):
+    """Cópias automáticas (feitas antes de cada virada): ver e voltar os dados para uma delas."""
+
+    def __init__(self, pai):
+        super().__init__(pai)
+        self.setWindowTitle("Cópias automáticas")
+        self.setMinimumSize(560, 420)
+        self.restaurou = False
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        titulo = QLabel("Cópias automáticas")
+        titulo.setObjectName("secao")
+        lay.addWidget(titulo)
+        ajuda = QLabel("O app salva uma cópia de todos os dados antes de cada virada de mês e antes "
+                       "de restaurar. Ficam as 6 mais novas de cada tipo, neste computador.")
+        ajuda.setObjectName("rotulo")
+        ajuda.setWordWrap(True)
+        lay.addWidget(ajuda)
+        self.tab = nova_tabela(["Quando", "Feita"],
+                               "Nenhuma cópia ainda. A primeira é feita na próxima virada de mês.")
+        self.tab.ao_editar(self.restaurar)
+        lay.addWidget(self.tab, 1)
+        botoes = QHBoxLayout()
+        pasta = QPushButton("Abrir a pasta")
+        pasta.clicked.connect(self._abrir_pasta)
+        fechar = QPushButton("Fechar")
+        fechar.clicked.connect(self.accept)
+        self.botao_restaurar = QPushButton("Restaurar esta cópia")
+        self.botao_restaurar.setObjectName("primario")
+        self.botao_restaurar.clicked.connect(self.restaurar)
+        botoes.addWidget(pasta)
+        botoes.addStretch()
+        botoes.addWidget(fechar)
+        botoes.addWidget(self.botao_restaurar)
+        lay.addLayout(botoes)
+        self._carregar()
+
+    def _carregar(self):
+        self._copias = fin().listar_backups()
+        preencher(self.tab, [(i, [f"{c['quando']:%d/%m/%Y às %H:%M}", c["motivo"]])
+                             for i, c in enumerate(self._copias)])
+        if self._copias:
+            self.tab.selectRow(0)
+        self.botao_restaurar.setEnabled(bool(self._copias))
+
+    def _abrir_pasta(self):
+        pasta = fin().pasta_backups
+        pasta.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(pasta)))
+
+    def restaurar(self):
+        i = selecionado(self.tab)
+        if i is None:
+            QMessageBox.information(self, "Restaurar", "Selecione uma cópia na lista.")
+            return
+        c = self._copias[i]
+        pergunta = (f"Voltar os dados para a cópia de {c['quando']:%d/%m/%Y às %H:%M} ({c['motivo'].lower()})?\n\n"
+                    "Todos os dados atuais (compras, receitas, despesas, empréstimos, caixinhas e meses) "
+                    "serão trocados pelos da cópia. O que foi lançado depois dela some.\n\n"
+                    "Antes, o app salva uma cópia de como está agora, para você poder voltar atrás.")
+        if QMessageBox.question(self, "Restaurar cópia", pergunta) != QMessageBox.Yes:
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            seguranca = fin().restaurar_backup(c["caminho"])
+        except ValueError as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "Não consegui restaurar", str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        self.restaurou = True
+        QMessageBox.information(self, "Cópia restaurada",
+                                "Os dados voltaram para a cópia escolhida.\n\n"
+                                f"Os dados de antes foram salvos em:\n{seguranca}")
+        self._carregar()
 
 
 class DatasCartoesDialog(QDialog):

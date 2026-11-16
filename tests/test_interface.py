@@ -106,3 +106,29 @@ def test_valores_em_reais_ficam_a_direita_e_nomes_a_esquerda(janela):
     alinhamento = [tabela.item(0, c).textAlignment() & 0x0F for c in range(3)]
     assert alinhamento == [Qt.AlignLeft, Qt.AlignHCenter, Qt.AlignRight]
     assert tabela.horizontalHeaderItem(2).textAlignment() & 0x0F == Qt.AlignRight
+
+
+def test_apagar_compra_e_desfazer_com_ctrl_z(janela, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from controle_financeiro.dados.contexto import fin
+    monkeypatch.setattr(QtWidgets.QMessageBox, "question", lambda *a, **k: QtWidgets.QMessageBox.Yes)
+    cartao = fin().listar_cartoes()[0]["nome"]
+    id_ = fin().lancar_compra(cartao, "Pizza desfazer", "R$ 55,00", parcelas="", pessoa=".")
+    original = fin().obter_compra(id_)
+    janela.ir_para(janela.cartoes)
+    janela.atualizar_tudo()
+    linha = next(r for r in range(janela.cartoes.tab.rowCount())
+                 if janela.cartoes.tab.item(r, 1).text() == "Pizza desfazer")
+    janela.cartoes.tab.selectRow(linha)
+    janela.cartoes.apagar()
+    assert fin().obter_compra(id_) is None
+    assert not janela.aviso_desfazer.isHidden()
+    janela.show()
+    janela.activateWindow()
+    assert QTest.qWaitForWindowActive(janela, 2000)
+    QTest.keyClick(janela, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert fin().obter_compra(id_) == original
+    assert janela.aviso_desfazer.isHidden()
+    janela.desfazer()  # de novo: nada para desfazer, sem erro
+    janela.menu.selecionar(0)

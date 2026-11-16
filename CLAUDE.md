@@ -46,7 +46,8 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 - **Esquema em um só lugar** (`dados/esquema.py`), com marcadores `{ID}`, `{REAL}`, `{INT}` trocados por dialeto. Mudar uma tabela exige **duas coisas**: editar `esquema.py` (e o ajuste de bancos antigos em `_preparar`, no SQLite) **e** criar um novo script em `supabase/migracoes/NN_*.sql` para rodar à mão no SQL Editor do Supabase (veja `supabase/README.md`, que lista a ordem).
 - **Multiusuário no Supabase:** todos os usuários compartilham as mesmas tabelas; cada linha tem `user_id` e o RLS isola os dados.
 - **Dados locais** (chave, conexão, sessão) ficam criptografados em `%LOCALAPPDATA%\ControleFinanceiro` (`config.py`, `seguranca/cofre.py`), nunca no projeto.
-- **Cópia antes da virada:** `Financas.virar_mes()` salva todos os dados em `%LOCALAPPDATA%\ControleFinanceiro\backups\<usuário>\antes-da-virada_*.cfauto` (criptografado com a chave local, sem senha; guarda as 6 mais novas) e só então vira. Se a cópia falhar, o mês não vira. `nucleo/ferramentas.ler_backup_automatico` abre o arquivo; ainda não há tela de restaurar.
+- **Cópia antes da virada:** `Financas.virar_mes()` salva todos os dados em `%LOCALAPPDATA%\ControleFinanceiro\backups\<usuário>\antes-da-virada_*.cfauto` (criptografado com a chave local, sem senha; guarda as 6 mais novas) e só então vira. Se a cópia falhar, o mês não vira. Em Ferramentas > Cópias automáticas o usuário restaura uma delas (`Financas.restaurar_backup`): troca todos os dados numa transação só, mantendo os ids, e antes salva outra cópia (`antes-de-restaurar_*`). Restaurar exige estar online no Supabase.
+- **Desfazer exclusão:** ao apagar compra, receita ou despesa pela tela, a janela oferece "Desfazer (Ctrl+Z)" por 30 s (`Janela.oferecer_desfazer`); `Financas.recolocar` grava a linha de novo com o mesmo id. Comandos que já trazem a coluna `id` são reenviados assim pela fila offline (`_sql_para_envio`).
 
 ## Interface (`ui/`)
 
@@ -89,5 +90,6 @@ Regras da Ayla que o código deve preservar: consultas nunca alteram dados; escr
 ## Fluxo de trabalho
 
 - Branch de trabalho: `Develop` (remoto `origin/Develop`); `master` é a base.
+- CI: `.github/workflows/testes.yml` roda pyflakes e pytest no Windows e no Linux a cada push e pull request.
 - Mudou regra de negócio: adicione teste em `tests/test_financas.py` (usa SQLite temporário via `criar_banco("teste")`). O banco de teste é compartilhado entre os testes: use nomes únicos (veja `_virada`) e passe `pasta_backups=tmp_path` ao criar `Financas`. As ferramentas MCP são testadas em `tests/test_servidor.py`.
 - O working tree pode ter alterações do usuário não commitadas: não reverta nem commite sem ele pedir.

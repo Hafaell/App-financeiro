@@ -1,6 +1,6 @@
 """Ferramentas: busca, backup, datas das faturas, relatório PDF, meses, virada de mês e atalhos."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from controle_financeiro.ui.paginas.base import Pagina
 
@@ -11,6 +11,7 @@ ATALHOS = [
     ("Ctrl+F", "Buscar (em Transações, filtra a tabela)"),
     ("Enter", "Editar a linha selecionada"),
     ("Delete", "Apagar a linha selecionada"),
+    ("Ctrl+Z", "Desfazer a última exclusão"),
     ("Alt+← e Alt+→", "Mês anterior e próximo mês"),
     ("F5", "Atualizar os dados"),
 ]
@@ -27,16 +28,17 @@ class FerramentasPage(Pagina):
         grade.setVerticalSpacing(16)
         itens = [
             ("Buscar", "Procurar um item, pessoa ou descrição em todos os meses.",
-             "Abrir a busca", janela.abrir_busca),
-            ("Relatório PDF", "Gerar o resumo do mês em PDF.", "Gerar o PDF", janela.exportar_pdf),
-            ("Backup", "Salvar todos os dados em um arquivo protegido por senha.",
-             "Fazer backup", janela.abrir_backup),
+             [("Abrir a busca", janela.abrir_busca)]),
+            ("Relatório PDF", "Gerar o resumo do mês em PDF.", [("Gerar o PDF", janela.exportar_pdf)]),
+            ("Backup e cópias", "Salvar os dados num arquivo com senha, ou voltar a uma cópia "
+             "automática feita antes da virada.",
+             [("Fazer backup", janela.abrir_backup), ("Cópias automáticas", janela.abrir_copias)]),
             ("Datas das faturas", "Dia de fechamento e vencimento de cada cartão.",
-             "Ver as datas", janela.abrir_datas),
-            ("Meses abertos", "Ver os meses e apagar os antigos.", "Ver os meses", janela.gerenciar_meses),
-            ("Virar o mês", "Abrir o mês seguinte, copiando o atual.", "Virar o mês", janela.virar_mes),
+             [("Ver as datas", janela.abrir_datas)]),
+            ("Meses abertos", "Ver os meses e apagar os antigos.", [("Ver os meses", janela.gerenciar_meses)]),
+            ("Virar o mês", "Abrir o mês seguinte, copiando o atual.", [("Virar o mês", janela.virar_mes)]),
         ]
-        for i, (titulo_btn, descricao, rotulo_botao, acao) in enumerate(itens):
+        for i, (titulo_btn, descricao, botoes) in enumerate(itens):
             caixa = QFrame()
             caixa.setObjectName("painel")
             cl = QVBoxLayout(caixa)
@@ -50,11 +52,15 @@ class FerramentasPage(Pagina):
             desc.setWordWrap(True)
             cl.addWidget(desc)
             cl.addStretch()
-            botao = QPushButton(rotulo_botao)
-            if titulo_btn == "Virar o mês":
-                botao.setObjectName("primario")
-            botao.clicked.connect(acao)
-            cl.addWidget(botao, 0)
+            linha_botoes = QHBoxLayout()
+            linha_botoes.setSpacing(8)
+            for rotulo_botao, acao in botoes:
+                botao = QPushButton(rotulo_botao)
+                if titulo_btn == "Virar o mês":
+                    botao.setObjectName("primario")
+                botao.clicked.connect(acao)
+                linha_botoes.addWidget(botao, 1)
+            cl.addLayout(linha_botoes)
             grade.addWidget(caixa, i // 3, i % 3)
         for c in range(3):
             grade.setColumnStretch(c, 1)
