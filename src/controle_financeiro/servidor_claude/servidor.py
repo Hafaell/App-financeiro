@@ -30,6 +30,8 @@ def virar_mes() -> dict:
     """Virada de mês: abre o mês seguinte ao mês atual, copiando o mês atual.
     Itens recorrentes permanecem no mês novo; os demais avançam uma parcela, e os que
     chegam ao fim ou são à vista saem. Receitas são copiadas.
+    Antes de virar, o app salva uma cópia de segurança de todos os dados (o caminho vem em
+    "backup"); se a cópia falhar, o mês não é virado.
     Use somente quando o usuário pedir a virada de mês."""
     return fin().virar_mes()
 
@@ -123,6 +125,32 @@ def lancar_compra(cartao: str, item: str, valor_parcela: str,
                              mes=mes or None, pessoa=pessoa,
                              recorrente=recorrente, categoria_id=_id_da_categoria(categoria))
     return {"ok": True, "id": id_}
+
+
+@mcp.tool()
+def editar_compra(id: int, cartao: str = "", item: str = "", parcelas: str = "",
+                  valor_parcela: str = "", pessoa: str = "", recorrente: bool | None = None,
+                  categoria: str = "") -> dict:
+    """Corrige uma compra de cartão que já existe, sem apagar nem recriar: o id, o mês e a
+    data de lançamento continuam os mesmos. Passe só o que muda; campo vazio fica como está.
+    id: veja em listar_compras. valor_parcela: ex. 'R$ 63,19'. parcelas: ex. '4/12' ('1/1' = à vista).
+    pessoa: nome de quem deve (vira empréstimo) ou '.' para a compra voltar a ser sua.
+    recorrente: True ou False (omitido = não muda).
+    categoria: nome de uma categoria cadastrada; para tirar a categoria, use definir_categoria.
+    Confirme com o usuário qual compra é antes de editar."""
+    campos = {chave: valor for chave, valor in (
+        ("cartao", cartao), ("item", item), ("parcelas", parcelas),
+        ("valor_parcela", valor_parcela), ("pessoa", pessoa)) if str(valor).strip()}
+    if recorrente is not None:
+        campos["recorrente"] = recorrente
+    if categoria:
+        id_categoria = _id_da_categoria(categoria)
+        if id_categoria is None:
+            return {"ok": False, "erro": f"Categoria '{categoria}' não existe."}
+        campos["categoria_id"] = id_categoria
+    if not campos:
+        return {"ok": False, "erro": "Nada para mudar: informe ao menos um campo."}
+    return {"ok": True, "compra": fin().editar_compra(id, **campos)}
 
 
 @mcp.tool()

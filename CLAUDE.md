@@ -46,6 +46,7 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 - **Esquema em um só lugar** (`dados/esquema.py`), com marcadores `{ID}`, `{REAL}`, `{INT}` trocados por dialeto. Mudar uma tabela exige **duas coisas**: editar `esquema.py` (e o ajuste de bancos antigos em `_preparar`, no SQLite) **e** criar um novo script em `supabase/migracoes/NN_*.sql` para rodar à mão no SQL Editor do Supabase (veja `supabase/README.md`, que lista a ordem).
 - **Multiusuário no Supabase:** todos os usuários compartilham as mesmas tabelas; cada linha tem `user_id` e o RLS isola os dados.
 - **Dados locais** (chave, conexão, sessão) ficam criptografados em `%LOCALAPPDATA%\ControleFinanceiro` (`config.py`, `seguranca/cofre.py`), nunca no projeto.
+- **Cópia antes da virada:** `Financas.virar_mes()` salva todos os dados em `%LOCALAPPDATA%\ControleFinanceiro\backups\<usuário>\antes-da-virada_*.cfauto` (criptografado com a chave local, sem senha; guarda as 6 mais novas) e só então vira. Se a cópia falhar, o mês não vira. `nucleo/ferramentas.ler_backup_automatico` abre o arquivo; ainda não há tela de restaurar.
 
 ## Interface (`ui/`)
 
@@ -66,7 +67,7 @@ Cada `@mcp.tool()` em `servidor_claude/servidor.py` é uma ferramenta do Claude 
 
 Ferramentas por assunto:
 - Meses e resumo: `listar_meses`, `virar_mes`, `resumo_mes`, `parcelas_futuras`, `assinaturas`.
-- Cartões e compras: `listar_cartoes`, `adicionar_cartao`, `listar_compras`, `lancar_compra`, `apagar_compra`.
+- Cartões e compras: `listar_cartoes`, `adicionar_cartao`, `listar_compras`, `lancar_compra`, `editar_compra` (muda só os campos informados, mantém id e data de lançamento), `apagar_compra`.
 - Receitas e despesas: `listar_lancamentos`, `adicionar_lancamento`, `apagar_lancamento`.
 - Categorias: `listar_categorias`, `adicionar_categoria`, `definir_categoria` (troca só a categoria de um lançamento existente), `gasto_por_categoria`, `definir_renda`.
 - Empréstimos: `quanto_me_devem`, `emprestimos_de`, `registrar_pagamento`.
@@ -88,5 +89,5 @@ Regras da Ayla que o código deve preservar: consultas nunca alteram dados; escr
 ## Fluxo de trabalho
 
 - Branch de trabalho: `Develop` (remoto `origin/Develop`); `master` é a base.
-- Mudou regra de negócio: adicione teste em `tests/test_financas.py` (usa SQLite temporário via `criar_banco("teste")`).
+- Mudou regra de negócio: adicione teste em `tests/test_financas.py` (usa SQLite temporário via `criar_banco("teste")`). O banco de teste é compartilhado entre os testes: use nomes únicos (veja `_virada`) e passe `pasta_backups=tmp_path` ao criar `Financas`. As ferramentas MCP são testadas em `tests/test_servidor.py`.
 - O working tree pode ter alterações do usuário não commitadas: não reverta nem commite sem ele pedir.

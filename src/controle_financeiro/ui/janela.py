@@ -283,7 +283,7 @@ class Janela(QMainWindow):
                     "• Itens marcados como Recorrente continuam no mês novo, sem avançar parcela.\n"
                     "• Parcelas avançam uma vez; as que chegaram ao fim saem.\n"
                     "• Compras à vista e despesas não recorrentes saem.\n\n"
-                    "Essa ação não pode ser desfeita.")
+                    "Antes de virar, o app salva uma cópia de segurança de todos os dados.")
         if QMessageBox.question(self, "Virar o mês", pergunta) != QMessageBox.Yes:
             return
         try:
@@ -299,6 +299,7 @@ class Janela(QMainWindow):
         linhas.append(f"Lançamentos removidos: {len(r['removidas'])}")
         for item, cartao in r["removidas"][:15]:
             linhas.append(f"   {item} ({cartao})")
+        linhas += ["", "Cópia de segurança de antes da virada:", f"   {r['backup']}"]
         QMessageBox.information(self, "Virada concluída", "\n".join(linhas))
         self.seletor.recarregar()
         self.atualizar_tudo()

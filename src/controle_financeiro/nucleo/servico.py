@@ -4,6 +4,7 @@ A interface e o servidor do Claude conversam só com esta classe.
 """
 from datetime import date
 
+from controle_financeiro.config import PASTA
 from controle_financeiro.dados.banco import criar_banco
 from controle_financeiro.nucleo.caixinhas import Caixinhas
 from controle_financeiro.nucleo.ferramentas import Ferramentas
@@ -16,13 +17,15 @@ from controle_financeiro.nucleo.emprestimos import Emprestimos
 from controle_financeiro.nucleo.lancamentos import Lancamentos
 from controle_financeiro.nucleo.meses import Meses
 from controle_financeiro.nucleo.resumo import Resumo
-from controle_financeiro.nucleo.utilidades import nome_mes, proximo_mes
+from controle_financeiro.nucleo.utilidades import nome_mes, proximo_mes, slug
 from controle_financeiro.nucleo.virada import Virada
 
 
 class Financas:
-    def __init__(self, banco):
+    def __init__(self, banco, pasta_backups=None):
         self.banco = banco
+        # Cópias automáticas antes da virada (uma pasta por usuário, fora do projeto)
+        self.pasta_backups = pasta_backups or PASTA / "backups"
         self.meses = Meses(banco)
         self.cartoes = Cartoes(banco)
         self.compras = Compras(banco, self.meses, self.cartoes)
@@ -38,7 +41,7 @@ class Financas:
 
     @classmethod
     def do_usuario(cls, usuario: str, cliente=None) -> "Financas":
-        return cls(criar_banco(usuario, cliente))
+        return cls(criar_banco(usuario, cliente), PASTA / "backups" / slug(usuario))
 
     def versao(self) -> int:
         return self.banco.versao()
@@ -60,7 +63,17 @@ class Financas:
         return self.meses.ativo()
 
     def virar_mes(self):
-        return self.virada.executar()
+        """Salva uma cópia de todos os dados e só então vira o mês. Se a cópia falhar,
+        o mês não é virado. O resultado traz o caminho da cópia em "backup"."""
+        try:
+            copia = self.ferramentas.backup_automatico(
+                self.pasta_backups, "antes-da-virada", self.meses.ativo())
+        except Exception as erro:
+            raise ValueError("Não consegui salvar a cópia de segurança, então o mês não foi virado. "
+                             f"Motivo: {erro}") from erro
+        resultado = self.virada.executar()
+        resultado["backup"] = str(copia)
+        return resultado
 
     def apagar_mes(self, mes):
         return self.meses.apagar(mes)
@@ -80,6 +93,9 @@ class Financas:
 
     def atualizar_compra(self, *args, **kwargs):
         return self.compras.atualizar(*args, **kwargs)
+
+    def editar_compra(self, id_, **campos):
+        return self.compras.editar(id_, **campos)
 
     def apagar_compra(self, id_):
         return self.compras.apagar(id_)

@@ -3,13 +3,15 @@ import base64
 import hashlib
 import json
 import os
-from datetime import date
+from datetime import date, datetime
+from pathlib import Path
 
 from cryptography.fernet import Fernet
 
 from controle_financeiro.nucleo.utilidades import nome_mes
 
 MAGICO = b"CFBK1"  # identifica o arquivo de backup do Controle Financeiro
+MAGICO_AUTO = b"CFAUTO1"  # cópia automática (criptografada com a chave deste computador)
 TABELAS_BACKUP = ("cartoes", "categorias", "rendas", "sessoes", "compras", "receitas",
                   "despesas", "caixinhas", "pagamentos")
 
@@ -66,3 +68,38 @@ class Ferramentas:
         with open(caminho, "wb") as f:
             f.write(MAGICO + salt + token)
         return str(caminho)
+
+    # ----- cópia automática (antes de ações que não têm volta, como a virada) -----
+
+    def _todos_os_dados(self) -> dict:
+        dados = {t: self.banco.consultar(f"SELECT * FROM {t}") for t in TABELAS_BACKUP}
+        dados["_gerado_em"] = datetime.now().isoformat(timespec="seconds")
+        return json.loads(json.dumps(dados, default=str))  # datas e decimais viram texto
+
+    def backup_automatico(self, pasta, prefixo: str, detalhe: str = "", manter: int = 6) -> Path:
+        """Salva todos os dados em `pasta`, criptografados com a chave deste computador
+        (a mesma dos outros arquivos locais), sem pedir senha. Guarda só as `manter`
+        cópias mais novas com o mesmo prefixo. Devolve o caminho do arquivo."""
+        from controle_financeiro.seguranca.cofre import Cofre
+
+        pasta = Path(pasta)
+        pasta.mkdir(parents=True, exist_ok=True)
+        nome = f"{prefixo}_{detalhe + '_' if detalhe else ''}{datetime.now():%Y-%m-%d_%H%M%S}.cfauto"
+        destino = pasta / nome
+        temporario = destino.with_suffix(".tmp")
+        temporario.write_bytes(MAGICO_AUTO + Cofre().cifrar(self._todos_os_dados()))
+        temporario.replace(destino)  # o arquivo só aparece completo
+        antigos = sorted(pasta.glob(f"{prefixo}_*.cfauto"), key=lambda a: a.stat().st_mtime)
+        for velho in antigos[:-manter] if manter > 0 else []:
+            velho.unlink(missing_ok=True)
+        return destino
+
+
+def ler_backup_automatico(caminho) -> dict:
+    """Abre uma cópia automática (.cfauto) neste computador e devolve os dados por tabela."""
+    from controle_financeiro.seguranca.cofre import Cofre
+
+    conteudo = Path(caminho).read_bytes()
+    if not conteudo.startswith(MAGICO_AUTO):
+        raise ValueError("Este arquivo não é uma cópia automática do Controle Financeiro.")
+    return Cofre().decifrar(conteudo[len(MAGICO_AUTO):])

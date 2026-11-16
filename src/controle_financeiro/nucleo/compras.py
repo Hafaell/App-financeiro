@@ -47,6 +47,25 @@ class Compras:
             raise ValueError("Compra não encontrada.")
         return True
 
+    CAMPOS_EDITAVEIS = ("cartao", "item", "parcelas", "valor_parcela", "pessoa", "recorrente",
+                        "categoria_id")
+
+    def editar(self, id_, **campos) -> dict:
+        """Muda só os campos informados de uma compra que já existe (os outros ficam como estão).
+        Mantém o id, o mês e a data de lançamento. Devolve a compra como ficou."""
+        desconhecidos = set(campos) - set(self.CAMPOS_EDITAVEIS)
+        if desconhecidos:
+            raise ValueError(f"Campo que não pode ser editado: {', '.join(sorted(desconhecidos))}.")
+        atual = self.obter(id_)
+        if not atual:
+            raise ValueError("Compra não encontrada.")
+        novos = {k: atual[k] for k in self.CAMPOS_EDITAVEIS}
+        novos.update(campos)
+        self.atualizar(id_, novos["cartao"], novos["item"], novos["parcelas"], novos["valor_parcela"],
+                       pessoa=novos["pessoa"], recorrente=novos["recorrente"],
+                       categoria_id=novos["categoria_id"])
+        return self.obter(id_)
+
     def apagar(self, id_) -> bool:
         _, n = self.banco.gravar("DELETE FROM compras WHERE id = ?", (int(id_),))
         return n > 0
