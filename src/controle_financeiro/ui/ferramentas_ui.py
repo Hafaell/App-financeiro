@@ -248,18 +248,19 @@ def gerar_relatorio_pdf(caminho, mes):
     limite = writer.height() - 36
     y = topo
 
-    AZUL, TEXTO, CINZA = "#2563EB", "#1F2937", "#6B7280"
+    from controle_financeiro.ui import tema
+    TEXTO, CINZA = tema.TEXTO, tema.TEXTO_SUAVE
     x_int = REL_MARGEM + REL_PAD
     larg_int = REL_LARGURA - 2 * REL_PAD
 
-    def caixa(yy, altura, x, largura, fundo="#FFFFFF", borda="#E5E7EB", raio=10):
+    def caixa(yy, altura, x, largura, fundo="#FFFFFF", borda=tema.BORDA, raio=10):
         pintor.setPen(QPen(QColor(borda), 1))
         pintor.setBrush(QBrush(QColor(fundo)))
         pintor.drawRoundedRect(QRectF(x, yy, largura, altura), raio, raio)
 
     def txt(yy, x, largura, t, tam=10, negrito=False, cor=TEXTO,
             alinha=Qt.AlignLeft, altura=REL_LINHA, quebra=False):
-        fonte = QFont("Segoe UI", tam)
+        fonte = QFont(tema.FONTE, tam)  # sem a fonte do app, o Qt usa a padrão
         fonte.setBold(negrito)
         pintor.setFont(fonte)
         pintor.setPen(QColor(cor))
@@ -285,14 +286,14 @@ def gerar_relatorio_pdf(caminho, mes):
             writer.newPage()
             y = topo
 
-    # Cabeçalho azul
+    # Cabeçalho em verde petróleo, como a lateral do app
     altura_topo = 84
     garantir(altura_topo)
-    caixa(y, altura_topo, REL_MARGEM, REL_LARGURA, AZUL, AZUL, raio=14)
-    txt(y + 12, x_int, larg_int, "CONTROLE FINANCEIRO", 8, False, "#DBEAFE", altura=14)
+    caixa(y, altura_topo, REL_MARGEM, REL_LARGURA, tema.TINTA, tema.TINTA, raio=14)
+    txt(y + 12, x_int, larg_int, "Controle Financeiro", 8, True, tema.MENTA, altura=14)
     txt(y + 26, x_int, larg_int, "Relatório financeiro", 20, True, "#FFFFFF", altura=28)
-    txt(y + 54, x_int, larg_int, "Dívidas e despesas consolidadas", 10, False, "#DBEAFE", altura=16)
-    txt(y + 68, x_int, larg_int, f"Mês consultado: {r['mes']}", 9, False, "#DBEAFE", altura=14)
+    txt(y + 54, x_int, larg_int, "Dívidas e despesas consolidadas", 10, False, "#C5DAD5", altura=16)
+    txt(y + 68, x_int, larg_int, f"Mês consultado: {r['mes']}", 9, False, "#C5DAD5", altura=14)
     y += altura_topo + REL_GAP
 
     def secao(titulo, linhas, rodape=None):
@@ -317,15 +318,15 @@ def gerar_relatorio_pdf(caminho, mes):
         ("Total de despesas", brl(total_despesas)),
     ], rodape=(
         "Saldo final após despesas", brl(r["saldo"]),
-        "#E8F7EE" if r["saldo"] >= 0 else "#FDECEC",
-        "#22A35A" if r["saldo"] >= 0 else "#DC2626",
-        "#15803D" if r["saldo"] >= 0 else "#B91C1C",
+        "#EAF6EE" if r["saldo"] >= 0 else "#FDF0EE",
+        "#BFE3CB" if r["saldo"] >= 0 else "#F1C4BD",
+        tema.VERDE_TEXTO if r["saldo"] >= 0 else tema.VERMELHO_TEXTO,
     ))
 
     linhas_despesas = [(f"Cartão {c}", brl(r["cartoes"][c]["meu_cartao"])) for c in cartoes]
     linhas_despesas += [(d["descricao"], brl(d["valor"])) for d in lancadas]
-    secao("Rafael — minhas despesas", linhas_despesas, rodape=(
-        "Total de despesas", brl(total_despesas), "#FFF7DB", "#E5B53A", TEXTO))
+    secao("Rafael: minhas despesas", linhas_despesas, rodape=(
+        "Total de despesas", brl(total_despesas), "#FDF4E3", "#F0D9A8", "#6E4306"))
 
     # Dívidas de outras pessoas: um bloco por pessoa e faixa de total geral
     alt_pessoa = REL_PAD + 20 + (len(cartoes) + 1) * REL_LINHA + REL_PAD
@@ -340,21 +341,21 @@ def gerar_relatorio_pdf(caminho, mes):
         yy += REL_LINHA
     for pessoa in sorted(terceiros):
         dados = terceiros[pessoa]
-        caixa(yy, alt_pessoa, x_int, larg_int, "#F3F7FD", "#C9D9F5", raio=8)
-        txt(yy + REL_PAD, x_int + REL_PAD, larg_int - 2 * REL_PAD, pessoa, 11, True, "#1E40AF",
+        caixa(yy, alt_pessoa, x_int, larg_int, "#F3F8F6", tema.BORDA, raio=8)
+        txt(yy + REL_PAD, x_int + REL_PAD, larg_int - 2 * REL_PAD, pessoa, 11, True, tema.TINTA,
             altura=20)
         ly = yy + REL_PAD + 20
         for c in cartoes:
             txt(ly, x_int + REL_PAD, larg_int - 2 * REL_PAD, c, 10, False, TEXTO)
             txt(ly, x_int + REL_PAD, larg_int - 2 * REL_PAD, brl(dados.get(c, 0)), 10, True,
-                "#1E40AF", Qt.AlignRight)
+                tema.TINTA, Qt.AlignRight)
             ly += REL_LINHA
-        txt(ly, x_int + REL_PAD, larg_int - 2 * REL_PAD, "Total", 10, True, "#1E40AF")
+        txt(ly, x_int + REL_PAD, larg_int - 2 * REL_PAD, "Total", 10, True, tema.TINTA)
         txt(ly, x_int + REL_PAD, larg_int - 2 * REL_PAD, brl(sum(dados.values())), 10, True,
-            "#1E40AF", Qt.AlignRight)
+            tema.TINTA, Qt.AlignRight)
         yy += alt_pessoa + 8
     faixa(yy + 2, "Total geral de terceiros", brl(total_terceiros),
-          "#E8F0FD", "#2563EB", "#1E3A8A")
+          tema.PRIMARIA_CLARA, tema.PRIMARIA, tema.TINTA)
     y += alt_terceiros + REL_GAP
 
     # Limitação mensal

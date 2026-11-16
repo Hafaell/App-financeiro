@@ -29,6 +29,7 @@ VERDE_TEXTO = "#17803D"
 AMARELO_TEXTO = "#A35A06"
 VERMELHO_TEXTO = "#B42318"
 DESPESA = "#E3A13B"        # barras de despesa no comparativo e no painel de saldo
+SEM_CATEGORIA_COR = "#A9B7B3"  # gastos sem categoria
 
 # Nomes antigos, usados em telas que ainda não foram renomeadas
 AZUL = PRIMARIA

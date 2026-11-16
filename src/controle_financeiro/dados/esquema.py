@@ -43,6 +43,14 @@ TABELAS = [
         data_alvo TEXT,
         UNIQUE (dono, nome)
     )""",
+    """CREATE TABLE IF NOT EXISTS movimentos_caixinha (
+        id {ID},
+        caixinha_id {INT} NOT NULL,
+        data TEXT NOT NULL,
+        valor {REAL} NOT NULL,
+        saldo {REAL} NOT NULL,
+        descricao TEXT NOT NULL DEFAULT ''
+    )""",
     """CREATE TABLE IF NOT EXISTS pagamentos (
         id {ID},
         pessoa TEXT NOT NULL,
@@ -79,7 +87,12 @@ TABELAS = [
 ]
 
 # Tabelas com coluna id (usadas para devolver o id de um lançamento novo)
-TABELAS_COM_ID = ("compras", "receitas", "despesas", "caixinhas", "pagamentos", "cartoes", "categorias")
+TABELAS_COM_ID = ("compras", "receitas", "despesas", "caixinhas", "pagamentos", "cartoes", "categorias",
+                  "movimentos_caixinha")
+
+# Tabelas que dependem de um script novo no Supabase. Enquanto o script não for rodado,
+# o app abre normalmente e só a função que usa a tabela fica desligada.
+TABELAS_OPCIONAIS = {"movimentos_caixinha": "07_historico_caixinhas.sql"}
 
 
 def comandos(dialeto: str):

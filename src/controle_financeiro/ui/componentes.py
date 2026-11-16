@@ -297,7 +297,7 @@ def _alinhamentos(t, linhas):
         textos = [str(v[c]) for _, v in linhas if c < len(v) and str(v[c]) not in ("", "—")]
         if isinstance(t.itemDelegateForColumn(c), (BalaoCartao, BarraProgresso)):
             saida.append(Qt.AlignCenter)
-        elif textos and all(x.startswith(("R$", "-R$")) for x in textos):
+        elif textos and all(x.startswith(("R$", "-R$", "+R$")) for x in textos):
             saida.append(DIREITA)
         elif textos and all(_CODIGO.match(x) or x in ("Sim", "Não") for x in textos):
             saida.append(Qt.AlignCenter)

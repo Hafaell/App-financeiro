@@ -1,9 +1,10 @@
 """Página Caixinhas: valor guardado, meta, progresso e quanto guardar por mês até a data alvo."""
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
 from controle_financeiro.dados.contexto import fin
 
 from controle_financeiro.ui.componentes import BarraProgresso, FaixaNumeros, Formulario, Metrica, nova_tabela, preencher, selecionado, texto
-from controle_financeiro.ui.formatacao import brl
+from controle_financeiro.ui.formatacao import brl, data_br
 from controle_financeiro.ui.paginas.base import Pagina
 
 
@@ -26,10 +27,16 @@ class CaixinhasPage(Pagina):
         lay.addWidget(FaixaNumeros(self.k_guardado, self.k_metas, self.k_falta))
 
         barra = QHBoxLayout()
+        barra.setSpacing(10)
         ajuda = QLabel("Dê duplo clique em uma caixinha para editar. Meta e data alvo são opcionais.")
         ajuda.setObjectName("rotulo")
-        barra.addWidget(ajuda)
-        barra.addStretch()
+        ajuda.setWordWrap(True)
+        barra.addWidget(ajuda, 1)
+        for rotulo_botao, acao in (("Histórico", self.ver_historico), ("Retirar", self.retirar),
+                                   ("Guardar", self.guardar)):
+            b = QPushButton(rotulo_botao)
+            b.clicked.connect(acao)
+            barra.addWidget(b)
         botao = QPushButton("Nova caixinha")
         botao.setObjectName("primario")
         botao.setToolTip("Ctrl+N")
@@ -42,8 +49,15 @@ class CaixinhasPage(Pagina):
         self.tab.setItemDelegateForColumn(4, BarraProgresso(self.tab))
         self.tab.ao_editar(self.editar)
         lay.addWidget(self.tab, 1)
+        self.aviso_historico = QLabel("O histórico das caixinhas ainda não está ativo: rode o script "
+                                      "07_historico_caixinhas.sql no Supabase e abra o app de novo.")
+        self.aviso_historico.setObjectName("rotulo")
+        self.aviso_historico.setWordWrap(True)
+        self.aviso_historico.hide()
+        lay.addWidget(self.aviso_historico)
 
     def atualizar(self):
+        self.aviso_historico.setVisible(not fin().caixinhas_tem_historico())
         linhas = fin().andamento_caixinhas()
         self.k_guardado.definir(brl(sum(c["valor"] for c in linhas)))
         self.k_metas.definir(brl(sum(c["meta"] or 0 for c in linhas)))
@@ -101,3 +115,76 @@ class CaixinhasPage(Pagina):
             self.erro(e)
             return
         self.mudou()
+
+    # ----- guardar, retirar e histórico -----
+
+    def _escolhida(self):
+        id_ = selecionado(self.tab)
+        c = fin().obter_caixinha(id_) if id_ is not None else None
+        if not c:
+            QMessageBox.information(self, "Caixinhas", "Selecione uma caixinha na lista.")
+        return c
+
+    def guardar(self):
+        self._movimentar(retirar=False)
+
+    def retirar(self):
+        self._movimentar(retirar=True)
+
+    def _movimentar(self, retirar):
+        c = self._escolhida()
+        if not c:
+            return
+        acao = "Retirar de" if retirar else "Guardar em"
+        dlg = Formulario(self, f"{acao} {c['nome']}", [
+            ("valor", f"Valor (hoje tem {brl(c['valor'])})", texto("", "R$ 0,00")),
+            ("descricao", "Observação", texto("", "Opcional, ex.: salário de novembro")),
+        ])
+        if dlg.exec() != QDialog.Accepted:
+            return
+        v = dlg.valores()
+        try:
+            if retirar:
+                fin().retirar_da_caixinha(c["id"], v["valor"], v["descricao"])
+            else:
+                fin().guardar_na_caixinha(c["id"], v["valor"], v["descricao"])
+        except ValueError as e:
+            self.erro(e)
+            return
+        self.mudou()
+
+    def ver_historico(self):
+        c = self._escolhida()
+        if c:
+            HistoricoCaixinha(self, c).exec()
+
+
+class HistoricoCaixinha(QDialog):
+    """Cada valor guardado, retirado ou ajustado numa caixinha, do mais novo para o mais antigo."""
+
+    def __init__(self, pai, caixinha):
+        super().__init__(pai)
+        self.setWindowTitle(f"Histórico: {caixinha['nome']}")
+        self.setMinimumSize(560, 420)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 22, 24, 20)
+        lay.setSpacing(12)
+        titulo = QLabel(f"{caixinha['nome']} ({caixinha['dono']})")
+        titulo.setObjectName("secao")
+        lay.addWidget(titulo)
+        saldo = QLabel(f"Valor hoje: {brl(caixinha['valor'])}")
+        saldo.setObjectName("total")
+        lay.addWidget(saldo)
+        if fin().caixinhas_tem_historico():
+            vazio = "Nenhum movimento ainda. Use Guardar ou Retirar para registrar."
+        else:
+            vazio = "O histórico ainda não está ativo: falta rodar o script 07 no Supabase."
+        tab = nova_tabela(["Data", "Movimento", "Valor", "Ficou com"], vazio)
+        preencher(tab, [(m["id"], [data_br(m["data"]), m["descricao"] or "—",
+                                   ("+" if m["valor"] > 0 else "-") + brl(abs(m["valor"])),
+                                   brl(m["saldo"])])
+                        for m in fin().historico_caixinha(caixinha["id"])])
+        lay.addWidget(tab, 1)
+        fechar = QPushButton("Fechar")
+        fechar.clicked.connect(self.accept)
+        lay.addWidget(fechar, 0, Qt.AlignmentFlag.AlignRight)

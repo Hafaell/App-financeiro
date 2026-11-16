@@ -57,6 +57,24 @@ class Lancamentos:
             raise ValueError("Lançamento não encontrado.")
         return True
 
+    def editar(self, tabela, id_, **campos) -> dict:
+        """Muda só os campos informados de uma receita ou despesa (os outros ficam como estão).
+        Mantém o id, o mês e a data de lançamento. Receitas não têm recorrente nem categoria.
+        Devolve o lançamento como ficou."""
+        t = self._tabela(tabela)
+        permitidos = ("descricao", "valor") + (("recorrente", "categoria_id") if t == "despesas" else ())
+        desconhecidos = set(campos) - set(permitidos)
+        if desconhecidos:
+            raise ValueError(f"Campo que não pode ser editado em {t}: {', '.join(sorted(desconhecidos))}.")
+        atual = self.obter(t, id_)
+        if not atual:
+            raise ValueError("Lançamento não encontrado.")
+        novos = {k: atual.get(k) for k in ("descricao", "valor", "recorrente", "categoria_id")}
+        novos.update(campos)
+        self.atualizar(t, id_, novos["descricao"], novos["valor"], recorrente=novos["recorrente"],
+                       categoria_id=novos["categoria_id"])
+        return self.obter(t, id_)
+
     def apagar(self, tabela, id_) -> bool:
         _, n = self.banco.gravar(f"DELETE FROM {self._tabela(tabela)} WHERE id = ?", (int(id_),))
         return n > 0

@@ -13,7 +13,8 @@ from controle_financeiro.nucleo.utilidades import nome_mes
 MAGICO = b"CFBK1"  # identifica o arquivo de backup do Controle Financeiro
 MAGICO_AUTO = b"CFAUTO1"  # cópia automática (criptografada com a chave deste computador)
 TABELAS_BACKUP = ("cartoes", "categorias", "rendas", "sessoes", "compras", "receitas",
-                  "despesas", "caixinhas", "pagamentos")
+                  "despesas", "caixinhas", "pagamentos", "movimentos_caixinha")
+TABELAS_NOVAS = ("movimentos_caixinha",)  # cópias feitas antes delas existirem não as trazem
 
 
 class Ferramentas:
@@ -126,16 +127,20 @@ class Ferramentas:
     def restaurar(self, dados: dict):
         """Troca todos os dados do usuário pelos de uma cópia, numa transação só (tudo ou nada).
         Mantém os ids da cópia, porque compras e despesas apontam para as categorias pelo id."""
+        dados = dict(dados)
+        for tabela in TABELAS_NOVAS:
+            dados.setdefault(tabela, [])
         faltando = [t for t in TABELAS_BACKUP if not isinstance(dados.get(t), list)]
         if faltando:
             raise ValueError("A cópia está incompleta: faltam " + ", ".join(faltando) + ".")
         if not dados["sessoes"]:
             raise ValueError("A cópia não tem nenhum mês aberto.")
-        atuais_por_tabela = {t: self._colunas(t) for t in ORDEM_APAGAR}  # antes de abrir a transação
+        tabelas = [t for t in ORDEM_APAGAR if self.banco.disponivel(t)]  # sem script novo, pula
+        atuais_por_tabela = {t: self._colunas(t) for t in tabelas}  # antes de abrir a transação
         with self.banco.transacao() as con:
-            for tabela in ORDEM_APAGAR:
+            for tabela in tabelas:
                 con.execute(f"DELETE FROM {tabela}")
-            for tabela in reversed(ORDEM_APAGAR):
+            for tabela in reversed(tabelas):
                 linhas = dados[tabela]
                 if not linhas:
                     continue
@@ -162,8 +167,8 @@ class Ferramentas:
 
 
 # Ordem para apagar (quem aponta para outra tabela sai antes) e para regravar (ao contrário)
-ORDEM_APAGAR = ("compras", "despesas", "receitas", "pagamentos", "caixinhas", "rendas", "sessoes",
-                "categorias", "cartoes")
+ORDEM_APAGAR = ("movimentos_caixinha", "compras", "despesas", "receitas", "pagamentos", "caixinhas",
+                "rendas", "sessoes", "categorias", "cartoes")
 MOTIVOS = {"antes-da-virada": "Antes da virada de", "antes-de-restaurar": "Antes de restaurar uma cópia"}
 TABELAS_DESFAZER = ("compras", "receitas", "despesas")
 LOTE = 200  # linhas por comando INSERT ao regravar

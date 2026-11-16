@@ -2,9 +2,9 @@
 from datetime import date
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QHBoxLayout, QLabel, QProgressBar,
+    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
     QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 from controle_financeiro.dados.contexto import fin
@@ -13,7 +13,7 @@ from controle_financeiro.ui.componentes import FaixaNumeros, Formulario, Metrica
 from controle_financeiro.ui.dialogos import CategoriasDialog
 from controle_financeiro.ui.formatacao import brl
 from controle_financeiro.ui.paginas.base import Pagina
-from controle_financeiro.ui.tema import DESPESA, MENTA
+from controle_financeiro.ui.tema import DESPESA, MENTA, SEM_CATEGORIA_COR
 
 
 def _pct(valor):
@@ -43,6 +43,39 @@ class BarraUso(QWidget):
             largura = self.width() * min(self.uso, 100) / 100
             p.setBrush(QColor(cor))
             p.drawRoundedRect(QRectF(0, 0, max(largura, 10), self.height()), 5, 5)
+        p.end()
+
+
+class BarraCategorias(QWidget):
+    """Uma barra só, dividida em pedaços do tamanho do gasto de cada categoria, na cor dela."""
+
+    def __init__(self):
+        super().__init__()
+        self.partes = []  # [(valor, cor)]
+        self.setFixedHeight(14)
+
+    def definir(self, partes):
+        self.partes = partes
+        self.update()
+
+    def paintEvent(self, evento):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor("#E5ECE9"))
+        p.drawRoundedRect(QRectF(self.rect()), 7, 7)
+        total = sum(v for v, _ in self.partes)
+        if total > 0:
+            # recorta as pontas arredondadas e pinta cada pedaço com 2 px de folga entre eles
+            caminho = QPainterPath()
+            caminho.addRoundedRect(QRectF(self.rect()), 7, 7)
+            p.setClipPath(caminho)
+            x = 0.0
+            for valor, cor in self.partes:
+                largura = self.width() * valor / total
+                p.setBrush(QColor(cor))
+                p.drawRect(QRectF(x, 0, max(largura - 2, 1), self.height()))
+                x += largura
         p.end()
 
 
@@ -171,6 +204,23 @@ class VisaoPage(Pagina):
                                "positivo", lambda: janela.ir_para(janela.deve), "Abrir Empréstimos")
         lay.addWidget(FaixaNumeros(self.meu_cartao, self.com_emp, self.receber))
 
+        # Para onde foi o dinheiro: todas as categorias, com ou sem limite
+        self.categorias_card = QFrame()
+        self.categorias_card.setObjectName("painel")
+        cc = QVBoxLayout(self.categorias_card)
+        cc.setContentsMargins(24, 20, 24, 20)
+        cc.setSpacing(14)
+        titulo_cat = QLabel("Para onde foi o dinheiro")
+        titulo_cat.setObjectName("secao")
+        cc.addWidget(titulo_cat)
+        self.barra_categorias = BarraCategorias()
+        cc.addWidget(self.barra_categorias)
+        self._legenda = QGridLayout()
+        self._legenda.setHorizontalSpacing(10)
+        self._legenda.setVerticalSpacing(8)
+        cc.addLayout(self._legenda)
+        lay.addWidget(self.categorias_card)
+
         # Orçamento: uma barra de uso por categoria com limite, e a renda do mês
         self.orcamento_card = QFrame()
         self.orcamento_card.setObjectName("painel")
@@ -277,6 +327,47 @@ class VisaoPage(Pagina):
             self.renda.setText("Renda do mês não informada. Com ela, o app mostra quanto da renda "
                                "o cartão consome.")
 
+    def _atualizar_categorias(self):
+        """Gasto de cada categoria (compras suas e despesas), da maior para a menor."""
+        while self._legenda.count():
+            item = self._legenda.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        gastos = fin().gasto_por_categoria(self.mes())
+        cores = {c["id"]: (c["nome"], c["cor"]) for c in fin().listar_categorias()}
+        itens = []
+        for id_, valor in gastos.items():
+            if valor <= 0:
+                continue
+            nome, cor = cores.get(id_, ("Sem categoria", SEM_CATEGORIA_COR))
+            itens.append((valor, nome, cor))
+        itens.sort(key=lambda x: -x[0])
+        total = sum(v for v, _, _ in itens)
+        self.barra_categorias.definir([(v, cor) for v, _, cor in itens])
+        if not itens:
+            vazio = QLabel("Nenhum gasto neste mês ainda.")
+            vazio.setObjectName("rotulo")
+            self._legenda.addWidget(vazio, 0, 0)
+            return
+        metade = (len(itens) + 1) // 2  # duas colunas: maiores à esquerda
+        for i, (valor, nome, cor) in enumerate(itens):
+            linha, coluna = (i, 0) if i < metade else (i - metade, 5)
+            ponto = QLabel()
+            ponto.setFixedSize(10, 10)
+            ponto.setStyleSheet(f"background: {cor}; border-radius: 5px;")  # cor da categoria
+            rotulo = QLabel(nome)
+            pct = QLabel(f"{valor / total * 100:.0f}%")
+            pct.setObjectName("rotulo")
+            quanto = QLabel(brl(valor))
+            quanto.setObjectName("forte")
+            self._legenda.addWidget(ponto, linha, coluna)
+            self._legenda.addWidget(rotulo, linha, coluna + 1)
+            self._legenda.addWidget(pct, linha, coluna + 2, Qt.AlignmentFlag.AlignRight)
+            self._legenda.addWidget(quanto, linha, coluna + 3, Qt.AlignmentFlag.AlignRight)
+        self._legenda.setColumnStretch(1, 1)
+        self._legenda.setColumnMinimumWidth(4, 36)  # respiro entre as duas colunas
+        self._legenda.setColumnStretch(6, 1)
+
     def _abrir_categorias(self):
         CategoriasDialog(self).exec()
         self.mudou()
@@ -323,4 +414,5 @@ class VisaoPage(Pagina):
         self.meu_cartao.definir(brl(r["meu_cartao_total"]))
         self.com_emp.definir(brl(r["cartoes_com_emprestimos_total"]))
         self.receber.definir(brl(r["a_receber_de_pessoas"]))
+        self._atualizar_categorias()
         self._atualizar_orcamento(r)

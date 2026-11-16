@@ -36,6 +36,15 @@ def virar_mes() -> dict:
     return fin().virar_mes()
 
 
+@mcp.tool()
+def previsao_proximo_mes(mes: str = "") -> dict:
+    """Previsão do mês seguinte: como ele começaria se a virada fosse feita agora, com as mesmas
+    regras da virada (recorrentes ficam, parcelas avançam, receitas são copiadas). Só calcula,
+    não grava nada. Traz receitas, despesas, meu cartão (total e por cartão), empréstimos a
+    receber e o saldo previsto. mes vazio = mês atual (a previsão é do mês seguinte a ele)."""
+    return fin().previsao_proximo_mes(mes or None)
+
+
 # ----- resumo -----
 
 @mcp.tool()
@@ -178,6 +187,40 @@ def adicionar_lancamento(tabela: str, descricao: str, valor: str, mes: str = "",
 
 
 @mcp.tool()
+def editar_lancamento(tabela: str, id: int, descricao: str = "", valor: str = "",
+                      recorrente: bool | None = None, categoria: str = "") -> dict:
+    """Corrige uma receita ou despesa que já existe, sem apagar nem recriar: o id, o mês e a
+    data de lançamento continuam os mesmos. Passe só o que muda; campo vazio fica como está.
+    tabela: 'receitas' ou 'despesas'. id: veja em listar_lancamentos. valor: ex. 'R$ 1.200,00'.
+    recorrente e categoria valem só para despesas (receitas não têm). recorrente omitido = não muda.
+    categoria: nome de uma categoria cadastrada; para tirar a categoria, use definir_categoria.
+    Confirme com o usuário qual lançamento é antes de editar."""
+    campos = {chave: valor_ for chave, valor_ in (("descricao", descricao), ("valor", valor))
+              if str(valor_).strip()}
+    if recorrente is not None:
+        campos["recorrente"] = recorrente
+    if categoria:
+        id_categoria = _id_da_categoria(categoria)
+        if id_categoria is None:
+            return {"ok": False, "erro": f"Categoria '{categoria}' não existe."}
+        campos["categoria_id"] = id_categoria
+    if not campos:
+        return {"ok": False, "erro": "Nada para mudar: informe ao menos um campo."}
+    return {"ok": True, "lancamento": fin().editar_lancamento(tabela, id, **campos)}
+
+
+@mcp.tool()
+def buscar(texto: str) -> dict:
+    """Procura um texto em todos os meses: itens de compras, pessoas e descrições de receitas e
+    despesas (sem diferenciar maiúsculas). Ex.: 'uber', 'Pai', 'Netflix'. Devolve até 200
+    resultados, do mês mais novo para o mais antigo, e o total somado.
+    Útil para perguntas como "quanto gastei com Uber esse ano?". Só leitura."""
+    resultados = fin().buscar(texto)
+    return {"resultados": resultados, "quantidade": len(resultados),
+            "total": round(sum(r["valor"] or 0 for r in resultados), 2)}
+
+
+@mcp.tool()
 def apagar_lancamento(tabela: str, id: int) -> dict:
     """Apaga uma receita ou despesa pelo id."""
     return {"ok": fin().apagar_lancamento(tabela, id)}
@@ -230,6 +273,45 @@ def assinaturas(mes: str = "") -> dict:
 def parcelas_futuras(mes: str = "", quantos: int = 6) -> list[dict]:
     """Quanto ainda vai cair nos próximos meses, por cartão (compras suas com parcelas)."""
     return fin().parcelas_futuras(mes or None, quantos)
+
+
+def _caixinha(dono, nome):
+    alvo = (dono.strip().lower(), nome.strip().lower())
+    return next((c for c in fin().listar_caixinhas()
+                 if (c["dono"].lower(), c["nome"].lower()) == alvo), None)
+
+
+@mcp.tool()
+def guardar_na_caixinha(dono: str, nome: str, valor: str, descricao: str = "") -> dict:
+    """Guarda dinheiro numa caixinha que já existe: soma o valor e anota no histórico.
+    Ex.: dono 'Rafael', nome 'Viagem', valor 'R$ 200,00'. Só a pedido do usuário."""
+    c = _caixinha(dono, nome)
+    if not c:
+        return {"ok": False, "erro": f"Não achei a caixinha {nome} de {dono}. Veja listar_caixinhas."}
+    return {"ok": True, "caixinha": fin().guardar_na_caixinha(c["id"], valor, descricao)}
+
+
+@mcp.tool()
+def retirar_da_caixinha(dono: str, nome: str, valor: str, descricao: str = "") -> dict:
+    """Retira dinheiro de uma caixinha: subtrai o valor e anota no histórico.
+    Não deixa retirar mais do que tem. Só a pedido do usuário."""
+    c = _caixinha(dono, nome)
+    if not c:
+        return {"ok": False, "erro": f"Não achei a caixinha {nome} de {dono}. Veja listar_caixinhas."}
+    return {"ok": True, "caixinha": fin().retirar_da_caixinha(c["id"], valor, descricao)}
+
+
+@mcp.tool()
+def historico_caixinha(dono: str, nome: str) -> dict:
+    """Movimentos de uma caixinha (guardado, retirado, ajustes), do mais novo para o mais antigo.
+    valor positivo = guardado, negativo = retirado; saldo = valor da caixinha depois. Só leitura."""
+    c = _caixinha(dono, nome)
+    if not c:
+        return {"ok": False, "erro": f"Não achei a caixinha {nome} de {dono}. Veja listar_caixinhas."}
+    if not fin().caixinhas_tem_historico():
+        return {"ok": False, "erro": "O histórico ainda não está ativo: falta rodar o script "
+                                     "07_historico_caixinhas.sql no Supabase."}
+    return {"ok": True, "caixinha": c, "movimentos": fin().historico_caixinha(c["id"])}
 
 
 @mcp.tool()

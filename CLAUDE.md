@@ -44,6 +44,8 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 - **`nucleo/servico.py` é a fachada única.** Tanto a interface quanto o servidor MCP chamam só `Financas`, que delega para um módulo por assunto (`compras`, `lancamentos`, `categorias`, `virada`...). Funcionalidade nova entra no módulo de `nucleo/`, ganha um método na fachada e só então vira tela ou ferramenta MCP.
 - **Dois bancos, mesma interface** (`dados/banco.py`): `BancoSqlite` (testes/local) e `BancoPostgres` (Supabase via HTTP, `dados/nuvem.py`). O SQL é escrito com `?` (estilo SQLite) e convertido para `%s` no Postgres. O banco Supabase mantém cópia em memória, fila offline e detecta mudanças externas por versão (`meta.versao`).
 - **Esquema em um só lugar** (`dados/esquema.py`), com marcadores `{ID}`, `{REAL}`, `{INT}` trocados por dialeto. Mudar uma tabela exige **duas coisas**: editar `esquema.py` (e o ajuste de bancos antigos em `_preparar`, no SQLite) **e** criar um novo script em `supabase/migracoes/NN_*.sql` para rodar à mão no SQL Editor do Supabase (veja `supabase/README.md`, que lista a ordem).
+- **Tabelas opcionais** (`TABELAS_OPCIONAIS` em `esquema.py`): dependem de um script novo no Supabase. Enquanto ele não roda, `BancoPostgres` marca a tabela como indisponível (`disponivel()`), o app abre normal e só a função dela fica desligada. Hoje: `movimentos_caixinha` (script `07_historico_caixinhas.sql`), o histórico das caixinhas (guardar, retirar, ajustes).
+- **Ids de linhas novas no Supabase:** dentro de `transacao()`, o `lastrowid` é da cópia local e pode não ser o do servidor. Para usar o id de uma linha recém-criada, grave com `gravar()` (que devolve o id real) e só então grave o que depende dele.
 - **Multiusuário no Supabase:** todos os usuários compartilham as mesmas tabelas; cada linha tem `user_id` e o RLS isola os dados.
 - **Dados locais** (chave, conexão, sessão) ficam criptografados em `%LOCALAPPDATA%\ControleFinanceiro` (`config.py`, `seguranca/cofre.py`), nunca no projeto.
 - **Cópia antes da virada:** `Financas.virar_mes()` salva todos os dados em `%LOCALAPPDATA%\ControleFinanceiro\backups\<usuário>\antes-da-virada_*.cfauto` (criptografado com a chave local, sem senha; guarda as 6 mais novas) e só então vira. Se a cópia falhar, o mês não vira. Em Ferramentas > Cópias automáticas o usuário restaura uma delas (`Financas.restaurar_backup`): troca todos os dados numa transação só, mantendo os ids, e antes salva outra cópia (`antes-de-restaurar_*`). Restaurar exige estar online no Supabase.
@@ -52,7 +54,8 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 ## Interface (`ui/`)
 
 - **Menu lateral em seções**, definido na lista `secoes` de `ui/janela.py`: **Geral** (Visão geral, Transações, Receitas e despesas, Planejamento, Comparativo), **Pessoal** (Empréstimos, Caixinhas) e **Sistema** (Importar extrato, Ferramentas). Critério: Geral é o dia a dia do mês; Pessoal é o que é só do usuário (quem deve a ele, o que ele guarda); Sistema é entrada em lote e manutenção. Página nova entra nessa lista e ganha `Ctrl+número` sozinha.
-- **Visão geral não tem listas:** só os números do mês, o orçamento e os botões de lançar. Receitas e despesas e Caixinhas têm páginas próprias (`paginas/lancamentos.py`, `paginas/caixinhas.py`).
+- **Visão geral não tem listas:** só os números do mês, "Para onde foi o dinheiro" (todas as categorias, soma igual ao "Saiu"), o orçamento e os botões de lançar. Planejamento abre com a previsão do próximo mês (`Virada.prever`, mesmas regras da virada via `parcelas_seguintes`/`descricao_seguinte`). Receitas e despesas e Caixinhas têm páginas próprias (`paginas/lancamentos.py`, `paginas/caixinhas.py`).
+- **Diálogos** ficam no pacote `ui/dialogos/`: `acesso.py` (login, Supabase, Minha conta), `cadastros.py` (cartões, categorias, meses) e `compra.py` (formulário de compra). Importe pelo pacote: `from controle_financeiro.ui.dialogos import Login`.
 - **Tabelas:** use `nova_tabela(colunas, vazio)` de `ui/componentes.py` (classe `Tabela`). Ela ajusta as colunas ao conteúdo, mostra o texto `vazio` quando não há linhas e liga `Enter`/duplo clique e `Delete` por `ao_editar()` e `ao_apagar()`.
 - **Atalhos:** ligados em `ui/janela.py`; cada página responde ao `Ctrl+N` pelo método `novo()` (`paginas/base.py`). Ao mudar um atalho, atualize a lista `ATALHOS` em `paginas/ferramentas.py` e o README.
 - **Estilo:** cores (tokens `TINTA`, `PRIMARIA`, `MENTA`, `DESPESA`...) e folha de estilo só em `ui/tema.py` (evite `setStyleSheet` solto nas páginas). Lateral e painel de saldo em verde petróleo (`TINTA`), ação principal em `PRIMARIA`. Um `QWidget` puro dentro de um painel precisa de `setObjectName("transparente")`, senão pinta o fundo da janela.
@@ -67,12 +70,12 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 Cada `@mcp.tool()` em `servidor_claude/servidor.py` é uma ferramenta do Claude Desktop; ao criar ou alterar uma, o servidor precisa ser reiniciado. Categorias e cartões são passados por **nome** nas ferramentas (`_id_da_categoria` converte para id).
 
 Ferramentas por assunto:
-- Meses e resumo: `listar_meses`, `virar_mes`, `resumo_mes`, `parcelas_futuras`, `assinaturas`.
+- Meses e resumo: `listar_meses`, `virar_mes`, `resumo_mes`, `previsao_proximo_mes` (simula a virada sem gravar), `parcelas_futuras`, `assinaturas`, `buscar` (texto em todos os meses, com total).
 - Cartões e compras: `listar_cartoes`, `adicionar_cartao`, `listar_compras`, `lancar_compra`, `editar_compra` (muda só os campos informados, mantém id e data de lançamento), `apagar_compra`.
-- Receitas e despesas: `listar_lancamentos`, `adicionar_lancamento`, `apagar_lancamento`.
+- Receitas e despesas: `listar_lancamentos`, `adicionar_lancamento`, `editar_lancamento` (muda só os campos informados), `apagar_lancamento`.
 - Categorias: `listar_categorias`, `adicionar_categoria`, `definir_categoria` (troca só a categoria de um lançamento existente), `gasto_por_categoria`, `definir_renda`.
 - Empréstimos: `quanto_me_devem`, `emprestimos_de`, `registrar_pagamento`.
-- Caixinhas: `listar_caixinhas`, `definir_caixinha`, `definir_meta_caixinha`.
+- Caixinhas: `listar_caixinhas`, `definir_caixinha`, `definir_meta_caixinha`, `guardar_na_caixinha`, `retirar_da_caixinha`, `historico_caixinha`.
 
 A skill **assistente-financeiro** (a "Ayla", em português, respostas curtas) vive na pasta sincronizada da conta do Claude, **fora deste repositório**. Rotinas:
 

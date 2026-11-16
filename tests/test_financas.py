@@ -267,3 +267,106 @@ def test_fila_offline_nao_repete_o_id_quando_o_comando_ja_traz():
     sql, args = _sql_para_envio({"tabela": "compras", "sql": "INSERT INTO compras (item) VALUES (?)",
                                  "args": ["X"], "id": 7})
     assert sql == "INSERT INTO compras (id, item) VALUES (%s, %s)" and args == [7, "X"]
+
+
+# ----- previsão do próximo mês -----
+
+def test_previsao_bate_com_o_mes_que_a_virada_abre(tmp_path):
+    app = _banco_proprio(tmp_path)
+    cartao = app.listar_cartoes()[0]["nome"]
+    app.lancar_compra(cartao, "Notebook", "R$ 300,00", parcelas="3/12", pessoa=".")
+    app.lancar_compra(cartao, "Última", "R$ 50,00", parcelas="12/12", pessoa=".")
+    app.lancar_compra(cartao, "Mercado", "R$ 400,00", parcelas="", pessoa=".")
+    app.lancar_compra(cartao, "Spotify", "R$ 21,90", parcelas="", pessoa=".", recorrente=True)
+    app.lancar_compra(cartao, "Celular", "R$ 250,00", parcelas="2/10", pessoa="Benzinho")
+    app.adicionar_lancamento("despesas", "Aluguel", "R$ 1.100,00", recorrente=True)
+    app.adicionar_lancamento("despesas", "Dentista (2/5)", "R$ 150,00")
+    app.adicionar_lancamento("despesas", "Feira", "R$ 80,00")
+    app.adicionar_lancamento("receitas", "Salário", "R$ 4.000,00")
+    antes = app.sessoes()
+
+    previsao = app.previsao_proximo_mes()
+    assert app.sessoes() == antes  # prever não grava nada
+    assert previsao["meu_cartao"] == 321.9 and previsao["emprestimos"] == 250.0
+    assert previsao["despesas"] == 1250.0 and previsao["receitas"] == 4000.0
+    assert previsao["saldo"] == round(4000 - 1250 - 321.9, 2) and not previsao["ja_aberto"]
+
+    novo = app.virar_mes()["novo"]
+    real = app.resumo_mes(novo)
+    assert previsao["mes"] == novo
+    assert (real["meu_cartao_total"], real["despesas_manuais"], real["receitas"], real["saldo"]) == \
+        (previsao["meu_cartao"], previsao["despesas"], previsao["receitas"], previsao["saldo"])
+    assert real["cartoes_com_emprestimos_total"] == round(previsao["meu_cartao"] + previsao["emprestimos"], 2)
+    assert app.previsao_proximo_mes(previsao["origem"])["ja_aberto"]
+
+
+# ----- histórico das caixinhas -----
+
+def test_guardar_e_retirar_anotam_no_historico(tmp_path):
+    import pytest
+    app = _banco_proprio(tmp_path)
+    app.definir_caixinha("Rafael", "Viagem", "R$ 100,00")
+    cx = next(c for c in app.listar_caixinhas() if c["nome"] == "Viagem")
+    app.guardar_na_caixinha(cx["id"], "R$ 250,00", "salário")
+    assert app.retirar_da_caixinha(cx["id"], "R$ 50,00")["valor"] == 300.0
+    with pytest.raises(ValueError, match="não dá para retirar"):
+        app.retirar_da_caixinha(cx["id"], "R$ 1.000,00")
+    with pytest.raises(ValueError):
+        app.guardar_na_caixinha(cx["id"], "0")
+    movimentos = [(m["valor"], m["saldo"], m["descricao"]) for m in app.historico_caixinha(cx["id"])]
+    assert movimentos == [(-50.0, 300.0, "Retirada"), (250.0, 350.0, "salário"), (100.0, 100.0, "Valor inicial")]
+
+
+def test_ajustar_o_valor_da_caixinha_anota_a_diferenca(tmp_path):
+    app = _banco_proprio(tmp_path)
+    app.definir_caixinha("Rafael", "Reserva", "R$ 1.000,00")
+    cx = next(c for c in app.listar_caixinhas() if c["nome"] == "Reserva")
+    app.definir_caixinha("Rafael", "Reserva", "R$ 1.200,00")      # pela Ayla
+    app.atualizar_caixinha(cx["id"], "Rafael", "Reserva", "R$ 1.150,00")  # pelo formulário
+    app.atualizar_caixinha(cx["id"], "Rafael", "Reserva", "R$ 1.150,00", "R$ 5.000,00")  # só a meta: sem movimento
+    assert [m["valor"] for m in app.historico_caixinha(cx["id"])] == [-50.0, 200.0, 1000.0]
+
+
+def test_restaurar_copia_antiga_sem_historico_de_caixinhas(tmp_path):
+    app = _banco_proprio(tmp_path)
+    app.definir_caixinha("Rafael", "Viagem", "R$ 100,00")
+    caminho = app.ferramentas.backup_automatico(app.pasta_backups, "antes-da-virada", app.mes_ativo())
+    from controle_financeiro.nucleo.ferramentas import ler_backup_automatico
+    dados = ler_backup_automatico(caminho)
+    del dados["movimentos_caixinha"]  # como uma cópia feita antes desta versão
+    app.ferramentas.restaurar(dados)
+    assert [c["nome"] for c in app.listar_caixinhas()] == ["Viagem"]
+    assert app.historico_caixinha(app.listar_caixinhas()[0]["id"]) == []
+
+
+def test_supabase_sem_o_script_07_abre_e_desliga_so_o_historico(tmp_path):
+    from controle_financeiro.dados.banco import BancoPostgres
+    from controle_financeiro.dados.nuvem import ErroBanco
+
+    class ClienteFalso:
+        logado = True
+
+        def preparar(self):
+            pass
+
+        def executar(self, sql, params=()):
+            if "movimentos_caixinha" in sql:
+                raise ErroBanco('relation "movimentos_caixinha" does not exist')
+            if sql.startswith("SELECT valor FROM meta"):
+                return {"linhas": [{"valor": 0}]}
+            if sql == "SELECT * FROM meta":  # o Supabase sempre tem a linha da versão
+                return {"linhas": [{"chave": "versao", "valor": 0}]}
+            if sql.startswith("SELECT"):
+                return {"linhas": []}
+            return {"id": 1, "afetadas": 1}
+
+        def executar_lote(self, comandos):
+            if any("movimentos_caixinha" in s for s, _ in comandos):
+                raise ErroBanco("tabela não existe")
+            return [{"id": None, "afetadas": 1} for _ in comandos]
+
+    banco = BancoPostgres(ClienteFalso(), tmp_path / "fila.dat", tmp_path / "cache.dat")
+    app = Financas(banco, pasta_backups=tmp_path)
+    assert app.listar_caixinhas() == []  # abriu normalmente
+    assert not app.caixinhas_tem_historico()
+    app.definir_caixinha("Rafael", "Viagem", "R$ 10,00")  # grava sem tentar o histórico

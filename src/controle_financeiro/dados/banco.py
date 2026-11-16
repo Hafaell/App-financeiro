@@ -16,13 +16,13 @@ from pathlib import Path
 from controle_financeiro.config import (BANCO_FORCADO, CARTOES_INICIAIS, CATEGORIAS_INICIAIS, CONEXAO_PATH, PASTA,
                      TIPO_BANCO)
 from controle_financeiro.seguranca.cofre import Cofre
-from controle_financeiro.dados.esquema import TABELAS_COM_ID, comandos
+from controle_financeiro.dados.esquema import TABELAS_COM_ID, TABELAS_OPCIONAIS, comandos
 from controle_financeiro.dados.nuvem import ClienteSupabase, ErroBanco, ErroConexao, SessaoExpirada
 from controle_financeiro.nucleo.utilidades import mes_do_calendario, slug
 
 
 TABELAS_SINCRONIA = ("cartoes", "categorias", "rendas", "sessoes", "compras", "receitas",
-                     "despesas", "caixinhas", "pagamentos", "meta")
+                     "despesas", "caixinhas", "pagamentos", "meta", "movimentos_caixinha")
 INTERVALO_VERIFICACAO = 1.0  # segundos entre verificações de mudança no Supabase
 INTERVALO_TENTATIVA = 5.0    # segundos entre tentativas de reconectar, quando offline
 # Sem internet ou sessão expirada: o app segue com a cópia salva e avisa na tela
@@ -118,6 +118,9 @@ class BancoSqlite:
     def estado(self):
         return {"tipo": "local", "online": True, "pendentes": 0, "falhas": 0}
 
+    def disponivel(self, tabela):
+        return True
+
 
 def _sql_para_envio(op):
     """Monta o comando de uma alteração pendente para o Supabase (com o id original)."""
@@ -153,6 +156,7 @@ class BancoPostgres:
         self._ultima_verificacao = 0.0
         self._ultima_tentativa = 0.0
         self.falhas = 0  # alterações que o Supabase recusou ao enviar
+        self.indisponiveis = set()  # tabelas opcionais cujo script ainda não rodou no Supabase
 
     # ----- conexão -----
 
@@ -237,7 +241,15 @@ class BancoPostgres:
         """Copia as tabelas do Supabase para a memória. Só funciona online."""
         local = self._copia()
         for tabela in tabelas:
-            linhas = self.cliente.executar(f"SELECT * FROM {tabela}")["linhas"]
+            if tabela in self.indisponiveis:
+                continue
+            try:
+                linhas = self.cliente.executar(f"SELECT * FROM {tabela}")["linhas"]
+            except ErroBanco:
+                if tabela not in TABELAS_OPCIONAIS:
+                    raise
+                self.indisponiveis.add(tabela)  # volta a tentar quando o app abrir de novo
+                continue
             colunas = [r[1] for r in local.execute(f"PRAGMA table_info({tabela})")]
             local.execute(f"DELETE FROM {tabela}")
             if linhas:
@@ -392,6 +404,11 @@ class BancoPostgres:
         fila.extend({"tabela": t, "sql": s_, "args": list(a), "id": i} for t, s_, a, i in registros)
         self._fila_salvar()
         self._salvar_cache()
+
+    def disponivel(self, tabela):
+        """False para tabela opcional que ainda não existe no Supabase (script não rodado)."""
+        self._copia()
+        return tabela not in self.indisponiveis
 
     def versao(self):
         self._verificar()

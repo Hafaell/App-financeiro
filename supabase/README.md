@@ -10,6 +10,7 @@ Rode os scripts de `migracoes/` no SQL Editor do Supabase, **na ordem**:
 | `04_cadastro_permitido.sql` | Lista de e-mails autorizados (versão antiga do cadastro) | Não é mais necessário |
 | `05_liberar_cadastro.sql` | Libera o cadastro de contas pelo app | Uma vez |
 | `06_data_lancamento.sql` | Adiciona a coluna com a data em que cada lançamento foi feito | Uma vez, antes de usar a versão com "Lançado em" |
+| `07_historico_caixinhas.sql` | Cria o histórico das caixinhas (cada valor guardado, retirado ou ajustado) | Uma vez; depois feche e abra o app. Sem ele, o app funciona, só sem histórico |
 
 A conexão do app com o projeto é feita dentro do próprio app, na primeira abertura,
 com o token de acesso pessoal do Supabase (Account > Access Tokens).

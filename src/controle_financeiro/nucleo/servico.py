@@ -75,6 +75,10 @@ class Financas:
         resultado["backup"] = str(copia)
         return resultado
 
+    def previsao_proximo_mes(self, mes=None):
+        """Como o mês seguinte começaria se a virada fosse feita agora (nada é gravado)."""
+        return self.virada.prever(mes)
+
     def apagar_mes(self, mes):
         return self.meses.apagar(mes)
 
@@ -140,6 +144,9 @@ class Financas:
     def atualizar_lancamento(self, tabela, id_, descricao, valor, recorrente=False,
                              categoria_id=None):
         return self.lancamentos.atualizar(tabela, id_, descricao, valor, recorrente, categoria_id)
+
+    def editar_lancamento(self, tabela, id_, **campos):
+        return self.lancamentos.editar(tabela, id_, **campos)
 
     def apagar_lancamento(self, tabela, id_):
         return self.lancamentos.apagar(tabela, id_)
@@ -217,6 +224,18 @@ class Financas:
 
     def definir_caixinha(self, dono, nome, valor):
         return self.caixinhas.definir(dono, nome, valor)
+
+    def guardar_na_caixinha(self, id_, valor, descricao=""):
+        return self.caixinhas.movimentar(id_, valor, descricao)
+
+    def retirar_da_caixinha(self, id_, valor, descricao=""):
+        return self.caixinhas.movimentar(id_, valor, descricao, retirar=True)
+
+    def historico_caixinha(self, id_):
+        return self.caixinhas.historico(id_)
+
+    def caixinhas_tem_historico(self):
+        return self.caixinhas.tem_historico()
 
     def atualizar_caixinha(self, id_, dono, nome, valor, meta=None, data_alvo=None):
         return self.caixinhas.atualizar(id_, dono, nome, valor, meta, data_alvo)

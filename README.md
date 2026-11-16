@@ -57,7 +57,7 @@ controle-financeiro/
       janela.py            janela principal: menu em seções, mês, conta e atalhos
       componentes.py       menu lateral, tabelas, cards e formulários
       tema.py              cores, fonte e folha de estilo
-      dialogos.py          telas de entrada, cadastro, conexão e Minha conta
+      dialogos/            acesso.py (entrada, conexão, Minha conta), cadastros.py e compra.py
       paginas/             uma página por aba
     servidor_claude/       servidor MCP para o Claude
   tests/                   testes automatizados (pytest)
