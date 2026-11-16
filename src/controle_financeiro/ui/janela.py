@@ -23,7 +23,7 @@ from controle_financeiro.ui.ferramentas_ui import BuscaDialog, BackupDialog, Dat
 from controle_financeiro.ui.paginas.transacoes import CartoesPage
 from controle_financeiro.ui.paginas.visao import VisaoPage
 from controle_financeiro.ui.seletor_mes import MesSeletor
-from controle_financeiro.ui.tema import AMARELO_TEXTO, TEXTO_SUAVE, VERDE_TEXTO
+from controle_financeiro.ui.tema import AMARELO_TEXTO, TEXTO_SUAVE, VERDE_TEXTO, VERMELHO_TEXTO
 
 class Janela(QMainWindow):
     def __init__(self):
@@ -44,8 +44,25 @@ class Janela(QMainWindow):
         sl = QVBoxLayout(lateral)
         sl.setContentsMargins(0, 0, 0, 0)
         sl.setSpacing(0)
-        marca = QLabel("Controle\nFinanceiro")
-        marca.setObjectName("marca")
+        marca = QWidget()
+        ml = QHBoxLayout(marca)
+        ml.setContentsMargins(22, 26, 18, 10)
+        ml.setSpacing(12)
+        selo = QLabel("R$")
+        selo.setObjectName("marcaSelo")
+        selo.setFixedSize(38, 38)
+        selo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        nomes = QVBoxLayout()
+        nomes.setSpacing(0)
+        nome_app = QLabel("Controle")
+        nome_app.setObjectName("marca")
+        sub = QLabel("Financeiro")
+        sub.setObjectName("marcaSub")
+        nomes.addWidget(nome_app)
+        nomes.addWidget(sub)
+        ml.addWidget(selo)
+        ml.addLayout(nomes)
+        ml.addStretch()
         self.menu = MenuLateral()
         rolagem_menu = QScrollArea()  # em janelas baixas o menu rola, sem esconder a conta
         rolagem_menu.setWidgetResizable(True)
@@ -314,7 +331,7 @@ class Janela(QMainWindow):
         elif e.get("sessao_expirada"):
             texto = (f"● Sessão expirada: feche e entre de novo para sincronizar · "
                      f"{e['pendentes']} aguardando envio")
-            cor = "#B42318"
+            cor = VERMELHO_TEXTO
         elif not e["online"]:
             texto = f"● Sem conexão: usando a cópia salva · {e['pendentes']} aguardando envio"
             cor = AMARELO_TEXTO

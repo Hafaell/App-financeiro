@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 from controle_financeiro.dados.contexto import fin
-from controle_financeiro.ui.componentes import BalaoCartao, ComboPessoa, Formulario, Kpi, nova_tabela, preencher, selecionado, texto
+from controle_financeiro.ui.componentes import BalaoCartao, ComboPessoa, FaixaNumeros, Formulario, Metrica, nova_tabela, preencher, selecionado, texto
 from controle_financeiro.ui.dialogos import dialogo_compra
 from controle_financeiro.ui.formatacao import _parcela_exibida, brl, data_br
 from controle_financeiro.ui.paginas.base import Pagina
@@ -23,15 +23,10 @@ class DevePage(Pagina):
         lay.setSpacing(18)
 
         # Linha de números do mês
-        numeros = QHBoxLayout()
-        numeros.setSpacing(16)
-        self.k_emprestado = Kpi("Emprestado no mês", "azul",
-                                "Soma das parcelas de empréstimo deste mês")
-        self.k_pago = Kpi("Já pago", "verde", "O que as pessoas devolveram neste mês")
-        self.k_aberto = Kpi("Em aberto", "amarelo", "O que ainda falta receber neste mês")
-        for k in (self.k_emprestado, self.k_pago, self.k_aberto):
-            numeros.addWidget(k)
-        lay.addLayout(numeros)
+        self.k_emprestado = Metrica("Emprestado no mês", "Soma das parcelas de empréstimo deste mês")
+        self.k_pago = Metrica("Já pago", "O que as pessoas devolveram neste mês", "positivo")
+        self.k_aberto = Metrica("Em aberto", "O que ainda falta receber neste mês", "aviso")
+        lay.addWidget(FaixaNumeros(self.k_emprestado, self.k_pago, self.k_aberto))
 
         corpo = self._corpo = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         corpo.setSpacing(24)
@@ -87,8 +82,8 @@ class DevePage(Pagina):
         pessoa_sel = self.tab.item(r, 0).text() if r >= 0 and self.tab.item(r, 0) else None
         dados = fin().quanto_me_devem(self.mes())
         self.k_emprestado.definir(brl(sum(d["emprestado"] for d in dados)))
-        self.k_pago.definir(brl(sum(d["ja_pago"] for d in dados)), "verde")
-        self.k_aberto.definir(brl(sum(d["em_aberto"] for d in dados)), "amarelo")
+        self.k_pago.definir(brl(sum(d["ja_pago"] for d in dados)))
+        self.k_aberto.definir(brl(sum(d["em_aberto"] for d in dados)))
         preencher(self.tab, [
             (i, [d["pessoa"], brl(d["emprestado"]), brl(d["ja_pago"]), brl(d["em_aberto"])])
             for i, d in enumerate(dados)])

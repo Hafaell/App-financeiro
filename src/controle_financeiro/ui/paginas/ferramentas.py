@@ -1,4 +1,5 @@
 """Ferramentas: busca, backup, datas das faturas, relatório PDF, meses, virada de mês e atalhos."""
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout
 
 from controle_financeiro.ui.paginas.base import Pagina
@@ -37,9 +38,9 @@ class FerramentasPage(Pagina):
         ]
         for i, (titulo_btn, descricao, rotulo_botao, acao) in enumerate(itens):
             caixa = QFrame()
-            caixa.setObjectName("kpi")
+            caixa.setObjectName("painel")
             cl = QVBoxLayout(caixa)
-            cl.setContentsMargins(20, 18, 20, 18)
+            cl.setContentsMargins(22, 20, 22, 20)
             cl.setSpacing(8)
             nome = QLabel(titulo_btn)
             nome.setObjectName("forte")
@@ -61,7 +62,7 @@ class FerramentasPage(Pagina):
 
         # Atalhos de teclado, em duas colunas
         atalhos = QFrame()
-        atalhos.setObjectName("kpi")
+        atalhos.setObjectName("painel")
         al = QVBoxLayout(atalhos)
         al.setContentsMargins(20, 18, 20, 18)
         al.setSpacing(12)
@@ -76,10 +77,10 @@ class FerramentasPage(Pagina):
             coluna = 0 if i < metade else 3
             linha = i if i < metade else i - metade
             tecla = QLabel(teclas)
-            tecla.setObjectName("forte")
+            tecla.setObjectName("tecla")
             descricao = QLabel(efeito)
             descricao.setObjectName("rotulo")
-            lista.addWidget(tecla, linha, coluna)
+            lista.addWidget(tecla, linha, coluna, Qt.AlignmentFlag.AlignLeft)
             lista.addWidget(descricao, linha, coluna + 1)
         lista.setColumnMinimumWidth(2, 28)  # respiro entre as duas colunas
         lista.setColumnStretch(1, 1)

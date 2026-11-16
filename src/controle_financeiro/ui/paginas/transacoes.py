@@ -28,6 +28,7 @@ class CartoesPage(Pagina):
         self.filtro.setMinimumWidth(190)
         self.filtro.currentIndexChanged.connect(self._filtro_mudou)
         apagar = QPushButton("Apagar selecionada")
+        apagar.setObjectName("perigo")
         apagar.setToolTip("Delete")
         apagar.clicked.connect(self.apagar)
         nova = QPushButton("Nova compra")

@@ -53,8 +53,11 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 - **Visão geral não tem listas:** só os números do mês, o orçamento e os botões de lançar. Receitas e despesas e Caixinhas têm páginas próprias (`paginas/lancamentos.py`, `paginas/caixinhas.py`).
 - **Tabelas:** use `nova_tabela(colunas, vazio)` de `ui/componentes.py` (classe `Tabela`). Ela ajusta as colunas ao conteúdo, mostra o texto `vazio` quando não há linhas e liga `Enter`/duplo clique e `Delete` por `ao_editar()` e `ao_apagar()`.
 - **Atalhos:** ligados em `ui/janela.py`; cada página responde ao `Ctrl+N` pelo método `novo()` (`paginas/base.py`). Ao mudar um atalho, atualize a lista `ATALHOS` em `paginas/ferramentas.py` e o README.
-- **Estilo:** cores e folha de estilo só em `ui/tema.py` (evite `setStyleSheet` solto nas páginas). Um `QWidget` puro dentro de um card precisa de `setObjectName("transparente")`, senão pinta o fundo da janela.
-- **Conferir no visual:** `tests/test_interface.py` monta a janela com `QT_QPA_PLATFORM=offscreen` e SQLite; o mesmo caminho serve para salvar retratos das páginas com `janela.grab()`.
+- **Estilo:** cores (tokens `TINTA`, `PRIMARIA`, `MENTA`, `DESPESA`...) e folha de estilo só em `ui/tema.py` (evite `setStyleSheet` solto nas páginas). Lateral e painel de saldo em verde petróleo (`TINTA`), ação principal em `PRIMARIA`. Um `QWidget` puro dentro de um painel precisa de `setObjectName("transparente")`, senão pinta o fundo da janela.
+- **Fonte:** `assets/fontes/ManropeCF-*.ttf` (Manrope, OFL, modificada com algarismos tabulares e nome de família único "Manrope CF"; veja `LEIAME.txt` lá). `app.py` registra com `carregar_fontes`; sem a pasta, cai na Segoe UI. O `build_exe.bat` inclui a pasta no executável.
+- **Números:** use `Metrica` dentro de `FaixaNumeros` (painel único com divisórias), não cards coloridos separados. O tom (`normal`, `positivo`, `aviso`, `negativo`) muda a cor do valor. A Visão geral tem o painel de saldo escuro como único destaque.
+- **Alinhamento das tabelas:** `preencher` decide sozinho: valores em reais à direita, datas/parcelas/Sim-Não/balões no centro, nomes à esquerda.
+- **Conferir no visual:** `tests/test_interface.py` monta a janela com `QT_QPA_PLATFORM=offscreen` e SQLite; o mesmo caminho serve para salvar retratos das páginas com `janela.grab()` (chame `carregar_fontes` antes, senão o retrato sai com outra fonte).
 - **Skills do projeto** (`.claude/skills/`, versões em `skills-lock.json`): `find-skills` (busca skills com `npx skills find`) e `frontend-design` (diretrizes de design, usadas no layout).
 
 ## Servidor MCP e skill assistente-financeiro

@@ -87,3 +87,22 @@ def test_enter_edita_e_delete_apaga_a_linha_selecionada(janela):
     QTest.keyClick(tabela, Qt.Key.Key_Return)
     QTest.keyClick(tabela, Qt.Key.Key_Delete)
     assert feitos == ["editar", "apagar"]
+
+
+def test_fonte_do_app_carrega_com_algarismos_de_mesma_largura(janela):
+    from pathlib import Path
+    from PySide6.QtGui import QFont, QFontMetrics
+    from controle_financeiro.ui.tema import FONTE, carregar_fontes
+    assert carregar_fontes(Path(__file__).resolve().parents[1] / "assets" / "fontes")
+    medida = QFontMetrics(QFont(FONTE, 10))
+    assert len({medida.horizontalAdvance(d) for d in "0123456789"}) == 1  # valores alinham na coluna
+
+
+def test_valores_em_reais_ficam_a_direita_e_nomes_a_esquerda(janela):
+    from PySide6.QtCore import Qt
+    from controle_financeiro.ui.componentes import nova_tabela, preencher
+    tabela = nova_tabela(["Item", "Parcelas", "Valor"])
+    preencher(tabela, [(1, ["Mercado", "3/12", "R$ 10,00"]), (2, ["Pão", "", "R$ 5,50"])])
+    alinhamento = [tabela.item(0, c).textAlignment() & 0x0F for c in range(3)]
+    assert alinhamento == [Qt.AlignLeft, Qt.AlignHCenter, Qt.AlignRight]
+    assert tabela.horizontalHeaderItem(2).textAlignment() & 0x0F == Qt.AlignRight

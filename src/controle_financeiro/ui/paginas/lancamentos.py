@@ -29,6 +29,7 @@ class PainelLancamento(QWidget):
         cabecalho.addWidget(rotulo)
         cabecalho.addStretch()
         apagar = QPushButton("Apagar")
+        apagar.setObjectName("perigo")
         apagar.setToolTip("Apagar a linha selecionada (Delete)")
         apagar.clicked.connect(self.apagar)
         add = QPushButton(f"Nova {singular}")

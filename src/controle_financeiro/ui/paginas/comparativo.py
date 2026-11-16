@@ -7,9 +7,9 @@ from controle_financeiro.dados.contexto import fin
 from controle_financeiro.ui.componentes import nova_tabela, preencher
 from controle_financeiro.ui.formatacao import brl
 from controle_financeiro.ui.paginas.base import Pagina
-from controle_financeiro.ui.tema import AZUL, BORDA, TEXTO, TEXTO_SUAVE, VERDE_TEXTO
+from controle_financeiro.ui.tema import BORDA, DESPESA, PRIMARIA, SUPERFICIE, TEXTO, TEXTO_SUAVE
 
-SERIES = (("Receitas", "receitas", VERDE_TEXTO), ("Despesas", "despesas", AZUL))
+SERIES = (("Receitas", "receitas", PRIMARIA), ("Despesas", "despesas", DESPESA))
 
 
 class BarrasWidget(QWidget):
@@ -29,9 +29,11 @@ class BarrasWidget(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         # fundo em card, igual às tabelas
         p.setPen(QPen(QColor(BORDA), 1))
-        p.setBrush(QColor("#FFFFFF"))
-        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14)
-        p.setFont(QFont("Segoe UI", 9))
+        p.setBrush(QColor(SUPERFICIE))
+        p.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 16, 16)
+        fonte = QFont(self.font())
+        fonte.setPointSizeF(9)
+        p.setFont(fonte)
         if not self.dados:
             p.setPen(QColor(TEXTO_SUAVE))
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,

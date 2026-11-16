@@ -12,16 +12,20 @@ from controle_financeiro.config import PASTA, TIPO_BANCO
 from controle_financeiro.dados.conexao import conexao_configurada
 from controle_financeiro.ui.dialogos import ConectarSupabase, Login
 from controle_financeiro.ui.janela import Janela
-from controle_financeiro.ui.tema import montar_tema
+from controle_financeiro.ui.tema import FONTE, carregar_fontes, montar_tema
+
+
+def caminho_asset(*partes):
+    """Acha um arquivo ou pasta de assets: dentro do app empacotado (PyInstaller) ou no projeto."""
+    candidatos = []
+    if getattr(sys, "frozen", False):
+        candidatos.append(Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "assets")
+    candidatos.append(Path(__file__).resolve().parents[3] / "assets")
+    return next((c.joinpath(*partes) for c in candidatos if c.joinpath(*partes).exists()), None)
 
 
 def caminho_icone():
-    """Acha o icone.png: dentro do app empacotado (PyInstaller) ou na pasta assets do projeto."""
-    candidatos = []
-    if getattr(sys, "frozen", False):
-        candidatos.append(Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "assets" / "icone.png")
-    candidatos.append(Path(__file__).resolve().parents[3] / "assets" / "icone.png")
-    return next((c for c in candidatos if c.exists()), None)
+    return caminho_asset("icone.png")
 
 
 def main():
@@ -36,6 +40,10 @@ def main():
     if icone:
         app.setWindowIcon(QIcon(str(icone)))  # janela, barra de tarefas e dialogos
     app.setStyle("Fusion")
+    if carregar_fontes(caminho_asset("fontes")):  # sem a pasta, fica a Segoe UI do Windows
+        fonte = app.font()
+        fonte.setFamily(FONTE)
+        app.setFont(fonte)
     app.setStyleSheet(montar_tema(PASTA / "tema"))
     if TIPO_BANCO == "postgres" and not conexao_configurada():
         if ConectarSupabase("inicio").exec() != QDialog.Accepted:

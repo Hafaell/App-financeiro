@@ -2,7 +2,7 @@
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 from controle_financeiro.dados.contexto import fin
 
-from controle_financeiro.ui.componentes import BarraProgresso, Formulario, Kpi, nova_tabela, preencher, selecionado, texto
+from controle_financeiro.ui.componentes import BarraProgresso, FaixaNumeros, Formulario, Metrica, nova_tabela, preencher, selecionado, texto
 from controle_financeiro.ui.formatacao import brl
 from controle_financeiro.ui.paginas.base import Pagina
 
@@ -20,14 +20,10 @@ class CaixinhasPage(Pagina):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(18)
 
-        numeros = QHBoxLayout()
-        numeros.setSpacing(16)
-        self.k_guardado = Kpi("Guardado", "verde", "Soma de todas as caixinhas")
-        self.k_metas = Kpi("Metas", "azul", "Soma das metas definidas")
-        self.k_falta = Kpi("Falta para as metas", "amarelo", "Quanto ainda falta guardar")
-        for k in (self.k_guardado, self.k_metas, self.k_falta):
-            numeros.addWidget(k)
-        lay.addLayout(numeros)
+        self.k_guardado = Metrica("Guardado", "Soma de todas as caixinhas", "positivo")
+        self.k_metas = Metrica("Metas", "Soma das metas definidas")
+        self.k_falta = Metrica("Falta para as metas", "Quanto ainda falta guardar", "aviso")
+        lay.addWidget(FaixaNumeros(self.k_guardado, self.k_metas, self.k_falta))
 
         barra = QHBoxLayout()
         ajuda = QLabel("Dê duplo clique em uma caixinha para editar. Meta e data alvo são opcionais.")

@@ -1,22 +1,95 @@
-"""Página Visão geral: os números do mês, o orçamento e os atalhos para lançar."""
+"""Página Visão geral: o saldo do mês em destaque, os outros números, o orçamento e os atalhos."""
 from datetime import date
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
+    QDialog, QFrame, QHBoxLayout, QLabel, QProgressBar,
     QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 from controle_financeiro.dados.contexto import fin
-from controle_financeiro.ui.componentes import Formulario, Kpi, texto
+from controle_financeiro.nucleo.utilidades import MESES_EXIBIR
+from controle_financeiro.ui.componentes import FaixaNumeros, Formulario, Metrica, texto
 from controle_financeiro.ui.dialogos import CategoriasDialog
 from controle_financeiro.ui.formatacao import brl
 from controle_financeiro.ui.paginas.base import Pagina
-from controle_financeiro.ui.tema import VERMELHO_TEXTO
+from controle_financeiro.ui.tema import DESPESA, MENTA
+
+
+def _pct(valor):
+    return f"{valor:.0f}%"
+
+
+class BarraUso(QWidget):
+    """Barra fina sobre o painel escuro: quanto das receitas as despesas já usaram."""
+
+    def __init__(self):
+        super().__init__()
+        self.uso = None  # percentual; None = sem receitas para comparar
+        self.setFixedHeight(10)
+
+    def definir(self, uso):
+        self.uso = uso
+        self.update()
+
+    def paintEvent(self, evento):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor("#2A5B58"))
+        p.drawRoundedRect(QRectF(self.rect()), 5, 5)
+        if self.uso:
+            cor = MENTA if self.uso < 80 else (DESPESA if self.uso <= 100 else "#FF8A75")
+            largura = self.width() * min(self.uso, 100) / 100
+            p.setBrush(QColor(cor))
+            p.drawRoundedRect(QRectF(0, 0, max(largura, 10), self.height()), 5, 5)
+        p.end()
+
+
+class Fluxo(QFrame):
+    """Entrou ou saiu no mês, dentro do painel de saldo. Clicar abre Receitas e despesas."""
+
+    def __init__(self, rotulo, cor, ao_clicar):
+        super().__init__()
+        self.setObjectName("fluxo")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Abrir Receitas e despesas")
+        self._ao_clicar = ao_clicar
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setSpacing(2)
+        topo = QHBoxLayout()
+        topo.setSpacing(8)
+        ponto = QLabel()
+        ponto.setFixedSize(8, 8)
+        ponto.setStyleSheet(f"background: {cor}; border-radius: 4px;")
+        nome = QLabel(rotulo)
+        nome.setObjectName("fluxoRotulo")
+        topo.addWidget(ponto)
+        topo.addWidget(nome)
+        topo.addStretch()
+        self.valor = QLabel("—")
+        self.valor.setObjectName("fluxoValor")
+        self.detalhe = QLabel("")
+        self.detalhe.setObjectName("fluxoRotulo")
+        lay.addLayout(topo)
+        lay.addWidget(self.valor)
+        lay.addWidget(self.detalhe)
+
+    def mouseReleaseEvent(self, evento):
+        if evento.button() == Qt.MouseButton.LeftButton and self.rect().contains(evento.position().toPoint()):
+            self._ao_clicar()
+        super().mouseReleaseEvent(evento)
+
+    def definir(self, valor, detalhe=""):
+        self.valor.setText(valor)
+        self.detalhe.setText(detalhe)
+        self.detalhe.setVisible(bool(detalhe))
 
 
 class VisaoPage(Pagina):
-    """Visão geral: resumo do mês e orçamento. As listas ficam nas suas próprias páginas;
-    clicar em um card abre a página do assunto."""
+    """Visão geral: o saldo do mês em destaque e, abaixo, os outros números e o orçamento.
+    As listas ficam nas suas próprias páginas; clicar em um número abre a página do assunto."""
 
     def __init__(self, janela):
         super().__init__(janela)
@@ -30,63 +103,80 @@ class VisaoPage(Pagina):
         self.alerta.hide()
         lay.addWidget(self.alerta)
 
-        # Título do resumo e, na mesma linha, os lançamentos mais usados no dia a dia
-        cabecalho = QHBoxLayout()
-        cabecalho.setSpacing(10)
-        self.titulo_mes = QLabel()
-        self.titulo_mes.setObjectName("secao")
-        cabecalho.addWidget(self.titulo_mes)
-        cabecalho.addStretch()
-        for rotulo, acao, principal in (
-                ("Nova receita", lambda: janela.lancamentos.receitas.adicionar(), False),
-                ("Nova despesa", lambda: janela.lancamentos.despesas.adicionar(), False),
-                ("Nova compra", lambda: janela.cartoes.nova(), True)):
-            botao = QPushButton(rotulo)
-            if principal:
-                botao.setObjectName("primario")
-                botao.setToolTip("Ctrl+N")
-            botao.clicked.connect(acao)
-            cabecalho.addWidget(botao)
-        lay.addLayout(cabecalho)
-
-        # Cards em grade de 3 colunas: quebram de linha em vez de empurrar a tela para o lado
-        grade = QGridLayout()
-        grade.setHorizontalSpacing(16)
-        grade.setVerticalSpacing(16)
-
         def abrir_lancamentos():
             janela.ir_para(janela.lancamentos)
 
         def abrir_transacoes():
             janela.ir_para(janela.cartoes)
 
-        self.receitas = Kpi("Receitas", "verde", "Entradas que você recebeu no mês",
-                            abrir_lancamentos, "Abrir Receitas e despesas")
-        self.despesas = Kpi("Despesas do mês", "amarelo",
-                            "Despesas lançadas, mais o que é seu nos cartões",
-                            abrir_lancamentos, "Abrir Receitas e despesas")
-        self.saldo = Kpi("Saldo", "verde", "Receitas, menos o total de despesas")
-        self.meu_cartao = Kpi("Meu cartão no mês", "azul",
-                              "Compras suas no cartão, sem empréstimos",
-                              abrir_transacoes, "Abrir Transações")
-        self.com_emp = Kpi("Cartões com empréstimos", "branco",
-                           "Total nos cartões, incluindo o que as pessoas devem",
-                           abrir_transacoes, "Abrir Transações")
-        self.receber = Kpi("A receber de pessoas", "azul",
-                           "Quanto as pessoas devem neste mês",
-                           lambda: janela.ir_para(janela.deve), "Abrir Empréstimos")
-        self._cards = [self.receitas, self.despesas, self.saldo,
-                       self.meu_cartao, self.com_emp, self.receber]
-        self._grade = grade
-        self._colunas = None
-        lay.addLayout(grade)
+        # Painel de saldo: o número que mais importa no mês, com o que entrou e o que saiu
+        painel = QFrame()
+        painel.setObjectName("saldo")
+        pl = QHBoxLayout(painel)
+        pl.setContentsMargins(30, 26, 22, 26)
+        pl.setSpacing(22)
+        esquerda = QVBoxLayout()
+        esquerda.setSpacing(6)
+        self.titulo_mes = QLabel()
+        self.titulo_mes.setObjectName("saldoRotulo")
+        self.saldo = QLabel("—")
+        self.saldo.setObjectName("saldoValor")
+        self.frase = QLabel()
+        self.frase.setObjectName("saldoFrase")
+        self.frase.setWordWrap(True)
+        self.uso = BarraUso()
+        esquerda.addWidget(self.titulo_mes)
+        esquerda.addWidget(self.saldo)
+        esquerda.addStretch()
+        esquerda.addWidget(self.frase)
+        esquerda.addSpacing(4)
+        esquerda.addWidget(self.uso)
+        pl.addLayout(esquerda, 3)
+        divisor = QFrame()
+        divisor.setObjectName("saldoDivisor")
+        divisor.setFixedWidth(1)
+        pl.addWidget(divisor)
+        direita = QVBoxLayout()
+        direita.setSpacing(4)
+        self.receitas = Fluxo("Entrou", MENTA, abrir_lancamentos)
+        self.despesas = Fluxo("Saiu", DESPESA, abrir_lancamentos)
+        direita.addWidget(self.receitas)
+        direita.addWidget(self.despesas)
+        pl.addLayout(direita, 2)
+        lay.addWidget(painel)
+
+        # Lançamentos mais usados no dia a dia
+        acoes = QHBoxLayout()
+        acoes.setSpacing(10)
+        for rotulo, acao, principal in (
+                ("Nova compra", lambda: janela.cartoes.nova(), True),
+                ("Nova despesa", lambda: janela.lancamentos.despesas.adicionar(), False),
+                ("Nova receita", lambda: janela.lancamentos.receitas.adicionar(), False)):
+            botao = QPushButton(rotulo)
+            if principal:
+                botao.setObjectName("primario")
+                botao.setToolTip("Ctrl+N")
+            botao.clicked.connect(acao)
+            acoes.addWidget(botao)
+        acoes.addStretch()
+        lay.addLayout(acoes)
+
+        # Cartões e empréstimos numa faixa só
+        self.meu_cartao = Metrica("Meu cartão no mês", "Compras suas no cartão, sem empréstimos",
+                                  "normal", abrir_transacoes, "Abrir Transações")
+        self.com_emp = Metrica("Cartões com empréstimos",
+                               "Total nos cartões, incluindo o que as pessoas devem",
+                               "normal", abrir_transacoes, "Abrir Transações")
+        self.receber = Metrica("A receber de pessoas", "Quanto as pessoas devem neste mês",
+                               "positivo", lambda: janela.ir_para(janela.deve), "Abrir Empréstimos")
+        lay.addWidget(FaixaNumeros(self.meu_cartao, self.com_emp, self.receber))
 
         # Orçamento: uma barra de uso por categoria com limite, e a renda do mês
         self.orcamento_card = QFrame()
-        self.orcamento_card.setObjectName("kpi")
+        self.orcamento_card.setObjectName("painel")
         orc = QVBoxLayout(self.orcamento_card)
-        orc.setContentsMargins(22, 18, 22, 18)
-        orc.setSpacing(12)
+        orc.setContentsMargins(24, 20, 24, 20)
+        orc.setSpacing(14)
         topo = QHBoxLayout()
         topo.setSpacing(10)
         titulo = QLabel("Orçamento do mês")
@@ -101,7 +191,7 @@ class VisaoPage(Pagina):
         topo.addWidget(renda)
         orc.addLayout(topo)
         self._barras = QVBoxLayout()
-        self._barras.setSpacing(12)
+        self._barras.setSpacing(14)
         orc.addLayout(self._barras)
         self.renda = QLabel()
         self.renda.setObjectName("rotulo")
@@ -118,25 +208,6 @@ class VisaoPage(Pagina):
         principal = QVBoxLayout(self)
         principal.setContentsMargins(0, 0, 0, 0)
         principal.addWidget(rolagem)
-        self._organizar_cards()
-
-    def resizeEvent(self, evento):
-        super().resizeEvent(evento)
-        self._organizar_cards()
-
-    def _organizar_cards(self):
-        """3 colunas em telas largas, 2 em médias e 1 em estreitas, para nunca passar da largura."""
-        largura = self.width()
-        colunas = 3 if largura >= 780 else (2 if largura >= 520 else 1)
-        if colunas == self._colunas:
-            return
-        self._colunas = colunas
-        while self._grade.count():
-            self._grade.takeAt(0)
-        for i, card in enumerate(self._cards):
-            self._grade.addWidget(card, i // colunas, i % colunas)
-        for c in range(3):
-            self._grade.setColumnStretch(c, 1 if c < colunas else 0)
 
     def _atualizar_alertas(self):
         avisos = fin().alertas_faturas(date.today(), 5)
@@ -172,17 +243,21 @@ class VisaoPage(Pagina):
             linha.setObjectName("transparente")
             ll = QVBoxLayout(linha)
             ll.setContentsMargins(0, 0, 0, 0)
-            ll.setSpacing(5)
+            ll.setSpacing(6)
             textos = QHBoxLayout()
+            textos.setSpacing(8)
+            ponto = QLabel()
+            ponto.setFixedSize(10, 10)
+            ponto.setStyleSheet(f"background: {c['cor']}; border-radius: 5px;")  # cor da categoria
             nome = QLabel(c["nome"])
             nome.setObjectName("forte")
             if gasto > c["orcamento"]:
-                situacao = QLabel(f"{brl(gasto)} de {brl(c['orcamento'])}: "
-                                  f"passou {brl(gasto - c['orcamento'])}")
-                situacao.setStyleSheet(f"color: {VERMELHO_TEXTO}; font-weight: 600;")
+                situacao = QLabel(f"{brl(gasto)} de {brl(c['orcamento'])}, passou {brl(gasto - c['orcamento'])}")
+                situacao.setObjectName("excedido")
             else:
-                situacao = QLabel(f"{brl(gasto)} de {brl(c['orcamento'])}")
+                situacao = QLabel(f"{brl(gasto)} de {brl(c['orcamento'])} ({_pct(uso)})")
                 situacao.setObjectName("rotulo")
+            textos.addWidget(ponto)
             textos.addWidget(nome)
             textos.addStretch()
             textos.addWidget(situacao)
@@ -222,15 +297,29 @@ class VisaoPage(Pagina):
 
     def atualizar(self):
         r = fin().resumo_mes(self.mes())
-        self.titulo_mes.setText(f"Resumo de {r['mes']}")
+        mes = MESES_EXIBIR[int(self.mes().split("-")[1]) - 1].lower()
+        self.titulo_mes.setText(f"Saldo de {mes}")
         self._atualizar_alertas()
-        self.receitas.definir(brl(r["receitas"]))
+        receitas = r["receitas"]
         # Mesmo total da página Receitas e despesas: despesas lançadas + o que é seu nos cartões
-        self.despesas.definir(brl(r["despesas_manuais"] + r["meu_cartao_total"]))
-        if r["saldo"] >= 0:
-            self.saldo.definir(brl(r["saldo"]), "verde")
+        despesas = r["despesas_manuais"] + r["meu_cartao_total"]
+        self.saldo.setText(brl(r["saldo"]))
+        self.saldo.setProperty("negativo", "true" if r["saldo"] < 0 else "false")
+        self.saldo.style().unpolish(self.saldo)
+        self.saldo.style().polish(self.saldo)
+        self.receitas.definir(brl(receitas))
+        self.despesas.definir(brl(despesas), f"{brl(r['meu_cartao_total'])} nos seus cartões")
+        if receitas > 0:
+            uso = despesas / receitas * 100
+            self.uso.definir(uso)
+            if uso <= 100:
+                self.frase.setText(f"As despesas usaram {_pct(uso)} do que entrou.")
+            else:
+                self.frase.setText(f"As despesas passaram as receitas em {brl(despesas - receitas)}.")
         else:
-            self.saldo.definir(brl(r["saldo"]), "branco", VERMELHO_TEXTO)
+            self.uso.definir(None)
+            self.frase.setText("Nada lançado neste mês ainda." if despesas == 0 else
+                               "Sem receitas lançadas neste mês: lance-as para ver quanto sobra.")
         self.meu_cartao.definir(brl(r["meu_cartao_total"]))
         self.com_emp.definir(brl(r["cartoes_com_emprestimos_total"]))
         self.receber.definir(brl(r["a_receber_de_pessoas"]))

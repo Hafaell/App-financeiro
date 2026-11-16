@@ -56,12 +56,13 @@ controle-financeiro/
       app.py               inicialização e tela de entrada
       janela.py            janela principal: menu em seções, mês, conta e atalhos
       componentes.py       menu lateral, tabelas, cards e formulários
-      tema.py              cores e folha de estilo
+      tema.py              cores, fonte e folha de estilo
       dialogos.py          telas de entrada, cadastro, conexão e Minha conta
       paginas/             uma página por aba
     servidor_claude/       servidor MCP para o Claude
   tests/                   testes automatizados (pytest)
   supabase/migracoes/      scripts SQL, na ordem de execução
+  assets/fontes/           fonte da interface (Manrope, licença OFL)
 ```
 
 ## Desenvolvimento

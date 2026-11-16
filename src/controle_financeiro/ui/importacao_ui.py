@@ -25,8 +25,7 @@ class ZonaArrastar(QLabel):
         self.setMinimumHeight(120)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAcceptDrops(True)
-        self.setStyleSheet("QLabel { border: 2px dashed #9DB8F2; border-radius: 14px; background: #FFFFFF; "
-                           "color: #5A6B8C; font-size: 11pt; }")
+        self.setObjectName("zonaArrastar")
 
     def dragEnterEvent(self, evento):
         if evento.mimeData().hasUrls():

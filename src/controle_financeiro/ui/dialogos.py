@@ -490,6 +490,7 @@ class GerenciarMeses(QDialog):
                 linha.addWidget(atual)
             else:
                 apagar = QPushButton("Apagar")
+                apagar.setObjectName("perigo")
                 apagar.clicked.connect(lambda _=False, mes=m: self._apagar(mes))
                 linha.addWidget(apagar)
             caixa = QWidget()
@@ -599,6 +600,7 @@ class CategoriasDialog(QDialog):
         lay.addWidget(self.tab, 1)
         botoes = QHBoxLayout()
         apagar = QPushButton("Apagar")
+        apagar.setObjectName("perigo")
         apagar.clicked.connect(self.apagar)
         nova = QPushButton("Nova categoria")
         nova.setObjectName("primario")

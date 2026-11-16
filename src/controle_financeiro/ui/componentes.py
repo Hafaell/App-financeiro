@@ -1,4 +1,6 @@
-"""Componentes reutilizáveis: menu lateral, tabelas, cartões de número, formulários e balões."""
+"""Componentes reutilizáveis: menu lateral, tabelas, números, formulários e balões."""
+import re
+
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
@@ -6,13 +8,10 @@ from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHeaderView, QInputDialog, QLabel, QLineEdit, QPushButton, QStyle,
     QStyleOptionViewItem, QStyledItemDelegate, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QHBoxLayout, QVBoxLayout, QWidget,
 )
 from controle_financeiro.dados.contexto import fin
-from controle_financeiro.ui.tema import AZUL, TEXTO, TEXTO_SUAVE, VERDE_TEXTO
-
-
-TONS = {"branco": "kpi", "verde": "kpi_verde", "amarelo": "kpi_amarelo", "azul": "kpi_azul"}
+from controle_financeiro.ui.tema import PRIMARIA, TEXTO, TEXTO_SUAVE, VERDE_TEXTO
 
 
 class MenuLateral(QWidget):
@@ -69,7 +68,7 @@ class MenuLateral(QWidget):
         return len(self._grupo.buttons())
 
 
-def icone_seta(direcao, cor=AZUL, lado=16):
+def icone_seta(direcao, cor=PRIMARIA, lado=16):
     """Seta desenhada (esquerda ou direita) para os botões do seletor de mês."""
     escala = 2  # desenha no dobro do tamanho para ficar nítida em telas com escala
     imagem = QPixmap(lado * escala, lado * escala)
@@ -91,7 +90,7 @@ class Tabela(QTableWidget):
     espaço que sobra é dividido entre elas. Vazia, mostra um texto de orientação.
     Enter edita e Delete apaga a linha selecionada, quando a tela liga essas ações."""
 
-    FOLGA = 16  # respiro de cada coluna, além do texto das células
+    FOLGA = 4  # respiro de cada coluna, além do texto e do recuo das células (tema)
 
     def __init__(self, colunas, vazio=""):
         super().__init__(0, len(colunas))
@@ -106,9 +105,9 @@ class Tabela(QTableWidget):
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setShowGrid(False)
-        self.setAlternatingRowColors(True)
+        self.setAlternatingRowColors(False)
         self.setWordWrap(False)
-        self.verticalHeader().setDefaultSectionSize(40)
+        self.verticalHeader().setDefaultSectionSize(44)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.horizontalHeader().setHighlightSections(False)
@@ -270,11 +269,11 @@ class BarraProgresso(QStyledItemDelegate):
         x = option.rect.center().x() - total / 2
         y = option.rect.center().y() - 3
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#DCE7FB"))
+        painter.setBrush(QColor("#E5ECE9"))
         painter.drawRoundedRect(QRectF(x, y, largura_barra, 8), 4, 4)
         cheio = largura_barra * min(max(pct, 0), 100) / 100
         if cheio > 0:
-            painter.setBrush(QColor(VERDE_TEXTO if pct >= 100 else AZUL))
+            painter.setBrush(QColor(VERDE_TEXTO if pct >= 100 else PRIMARIA))
             painter.drawRoundedRect(QRectF(x, y, max(cheio, 8), 8), 4, 4)
         painter.setPen(QColor(TEXTO))
         painter.drawText(QRectF(x + largura_barra + 8, option.rect.top(), largura_texto,
@@ -283,12 +282,41 @@ class BarraProgresso(QStyledItemDelegate):
         painter.restore()
 
 
+ESQUERDA = Qt.AlignLeft | Qt.AlignVCenter
+DIREITA = Qt.AlignRight | Qt.AlignVCenter
+
+
+_CODIGO = re.compile(r"^[\d/%,.\-]+$")  # datas, parcelas (3/12), percentuais, dias
+
+
+def _alinhamentos(t, linhas):
+    """Valores em reais à direita (as casas decimais ficam uma embaixo da outra); datas, parcelas,
+    Sim/Não, percentuais e balões no centro; nomes e descrições à esquerda, como numa planilha."""
+    saida = []
+    for c in range(t.columnCount()):
+        textos = [str(v[c]) for _, v in linhas if c < len(v) and str(v[c]) not in ("", "—")]
+        if isinstance(t.itemDelegateForColumn(c), (BalaoCartao, BarraProgresso)):
+            saida.append(Qt.AlignCenter)
+        elif textos and all(x.startswith(("R$", "-R$")) for x in textos):
+            saida.append(DIREITA)
+        elif textos and all(_CODIGO.match(x) or x in ("Sim", "Não") for x in textos):
+            saida.append(Qt.AlignCenter)
+        else:
+            saida.append(ESQUERDA)
+    return saida
+
+
 def preencher(t, linhas, cartao_col=None):
-    """Preenche a tabela. Todo texto fica centralizado.
-    Na coluna do cartão, Inter fica laranja e Nubank roxo.
+    """Preenche a tabela. Valores em reais ficam à direita, textos curtos no centro e o resto
+    à esquerda (o título da coluna acompanha). Na coluna do cartão, cada banco ganha o balão da sua cor.
     linhas: lista de (id, [valores]). O id fica guardado na coluna 0."""
     anterior = selecionado(t)
     t.setRowCount(0)
+    alinhamentos = _alinhamentos(t, linhas) if linhas else None
+    if alinhamentos:
+        for c, alinhamento in enumerate(alinhamentos):
+            if t.horizontalHeaderItem(c):
+                t.horizontalHeaderItem(c).setTextAlignment(alinhamento)
     for id_, valores in linhas:
         r = t.rowCount()
         t.insertRow(r)
@@ -296,7 +324,7 @@ def preencher(t, linhas, cartao_col=None):
             it = QTableWidgetItem(str(v))
             if c == 0:
                 it.setData(Qt.UserRole, id_)
-            it.setTextAlignment(Qt.AlignCenter)
+            it.setTextAlignment(alinhamentos[c] if alinhamentos and c < len(alinhamentos) else Qt.AlignCenter)
             t.setItem(r, c, it)
     if anterior is not None:
         for r in range(t.rowCount()):
@@ -371,23 +399,32 @@ def texto(valor="", dica=""):
     return e
 
 
-class Kpi(QFrame):
-    """Card de número. O tom (branco, verde, amarelo, azul) segue as cores do relatório.
-    Com ao_clicar, o card vira um atalho: clicar nele abre a página do assunto."""
+class Metrica(QFrame):
+    """Um número com rótulo e descrição. O tom (normal, positivo, aviso, negativo) muda a cor do
+    valor e da bolinha ao lado do rótulo. Com ao_clicar, vira atalho para a página do assunto."""
 
-    def __init__(self, rotulo, tom="branco", descricao="", ao_clicar=None, dica=""):
+    def __init__(self, rotulo, descricao="", tom="normal", ao_clicar=None, dica=""):
         super().__init__()
+        self.setObjectName("metrica")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(4)
+        topo = QHBoxLayout()
+        topo.setSpacing(8)
+        self.ponto = QLabel()
+        self.ponto.setObjectName("metricaPonto")
+        self.ponto.setFixedSize(8, 8)
         self.rotulo = QLabel(rotulo)
-        self.rotulo.setObjectName("rotulo")
+        self.rotulo.setObjectName("metricaRotulo")
+        topo.addWidget(self.ponto)
+        topo.addWidget(self.rotulo)
+        topo.addStretch()
         self.valor = QLabel("—")
-        self.valor.setObjectName("valor")
+        self.valor.setObjectName("metricaValor")
         self.descricao = QLabel(descricao)
         self.descricao.setObjectName("descricao")
         self.descricao.setWordWrap(True)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(22, 18, 22, 18)
-        lay.setSpacing(4)
-        lay.addWidget(self.rotulo)
+        lay.addLayout(topo)
         lay.addWidget(self.valor)
         lay.addWidget(self.descricao)
         lay.addStretch()
@@ -396,7 +433,7 @@ class Kpi(QFrame):
             self.setProperty("clicavel", "true")
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             self.setToolTip(dica)
-        self._aplicar_tom(tom)
+        self._tom(tom)
 
     def mouseReleaseEvent(self, evento):
         if self._ao_clicar and evento.button() == Qt.MouseButton.LeftButton \
@@ -404,16 +441,34 @@ class Kpi(QFrame):
             self._ao_clicar()
         super().mouseReleaseEvent(evento)
 
-    def _aplicar_tom(self, tom):
-        self.setObjectName(TONS[tom])
-        self.style().unpolish(self)
-        self.style().polish(self)
+    def _tom(self, tom):
+        for w in (self.valor, self.ponto):
+            w.setProperty("tom", tom)
+            w.style().unpolish(w)
+            w.style().polish(w)
 
-    def definir(self, texto_valor, tom=None, cor=None):
+    def definir(self, texto_valor, tom=None):
         if tom:
-            self._aplicar_tom(tom)
+            self._tom(tom)
         self.valor.setText(texto_valor)
-        self.valor.setStyleSheet(f"color: {cor};" if cor else "")
+
+
+class FaixaNumeros(QFrame):
+    """Painel branco com várias métricas lado a lado, separadas por linhas finas."""
+
+    def __init__(self, *metricas):
+        super().__init__()
+        self.setObjectName("faixa")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setSpacing(6)
+        for i, m in enumerate(metricas):
+            if i:
+                divisor = QFrame()
+                divisor.setObjectName("divisor")
+                divisor.setFixedWidth(1)
+                lay.addWidget(divisor)
+            lay.addWidget(m, 1)
 
 
 class Formulario(QDialog):
