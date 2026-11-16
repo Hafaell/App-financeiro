@@ -1,0 +1,12 @@
+# O que NÃO vai para o Vercel: só o desktop usa.
+src/controle_financeiro/ui/
+assets/
+tests/
+build/
+dist/
+*.bat
+*.iss
+*.pyw
+.claude/
+.github/
+docs/
