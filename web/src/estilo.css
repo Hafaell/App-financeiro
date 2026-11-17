@@ -91,10 +91,10 @@ a { color: var(--primaria); }
 .principal { margin-left: 248px; min-width: 0; }
 .topo {
   position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 12px;
-  padding: 12px 32px; background: rgba(242, 245, 243, 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--borda);
+  padding: 12px max(32px, calc((100% - 1180px) / 2 + 32px)); background: rgba(242, 245, 243, 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--borda);
 }
 .topo-marca { display: none; }
-main { padding: 24px 32px 48px; max-width: 1180px; }
+main { padding: 24px 32px 48px; max-width: 1180px; margin: 0 auto; }
 
 .seletor-mes { display: flex; align-items: center; gap: 4px; }
 .seletor-mes select {
