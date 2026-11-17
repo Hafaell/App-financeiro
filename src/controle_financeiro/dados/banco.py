@@ -157,6 +157,11 @@ class BancoPostgres:
         self._ultima_tentativa = 0.0
         self.falhas = 0  # alterações que o Supabase recusou ao enviar
         self.indisponiveis = set()  # tabelas opcionais cujo script ainda não rodou no Supabase
+        # True: cada leitura confere antes se o Supabase mudou (servidor do Claude, testes).
+        # A interface desliga isto: ler é só a cópia em memória, e a conferência roda em segundo
+        # plano (buscar_mudancas / aplicar_mudancas), sem travar a tela esperando a rede.
+        self.verificar_nas_consultas = True
+        self._versao_local = None  # versão da cópia; lida de outra thread, por isso fica em cache
 
     # ----- conexão -----
 
@@ -235,21 +240,42 @@ class BancoPostgres:
                 local.executemany(f"INSERT INTO {tabela} ({','.join(colunas)}) VALUES ({marcas})",
                                   [tuple(l[c] for c in colunas) for l in linhas])
         local.commit()
+        self._versao_local = self._ler_versao_local()
         return True
 
-    def _sincronizar(self, tabelas=TABELAS_SINCRONIA):
-        """Copia as tabelas do Supabase para a memória. Só funciona online."""
-        local = self._copia()
-        for tabela in tabelas:
-            if tabela in self.indisponiveis:
-                continue
+    def _ler_versao_local(self):
+        linha = self._local.execute("SELECT valor FROM meta WHERE chave = 'versao'").fetchone()
+        return linha["valor"] if linha else 0
+
+    def _buscar(self, tabelas):
+        """Baixa as tabelas do Supabase. Só rede: não toca na cópia, então pode rodar fora da
+        thread da interface. Todas vêm numa chamada só (um lote de SELECTs, também uma foto
+        consistente). Se o lote falhar porque uma tabela opcional ainda não existe, busca uma
+        por vez e marca a que faltar como indisponível."""
+        pedidas = [t for t in tabelas if t not in self.indisponiveis]
+        if not pedidas:
+            return {}
+        try:
+            resultados = self.cliente.executar_lote([(f"SELECT * FROM {t}", ()) for t in pedidas])
+            if (isinstance(resultados, list) and len(resultados) == len(pedidas)
+                    and all(isinstance(r, dict) and "linhas" in r for r in resultados)):
+                return {t: r["linhas"] for t, r in zip(pedidas, resultados)}
+        except ErroBanco:
+            pass  # provavelmente uma tabela opcional que não existe: descobre qual abaixo
+        dados = {}
+        for tabela in pedidas:
             try:
-                linhas = self.cliente.executar(f"SELECT * FROM {tabela}")["linhas"]
+                dados[tabela] = self.cliente.executar(f"SELECT * FROM {tabela}")["linhas"]
             except ErroBanco:
                 if tabela not in TABELAS_OPCIONAIS:
                     raise
                 self.indisponiveis.add(tabela)  # volta a tentar quando o app abrir de novo
-                continue
+        return dados
+
+    def _aplicar(self, dados):
+        """Troca, na cópia em memória, o conteúdo das tabelas pelo que veio do Supabase."""
+        local = self._copia()
+        for tabela, linhas in dados.items():
             colunas = [r[1] for r in local.execute(f"PRAGMA table_info({tabela})")]
             local.execute(f"DELETE FROM {tabela}")
             if linhas:
@@ -257,7 +283,50 @@ class BancoPostgres:
                 local.executemany(f"INSERT INTO {tabela} ({','.join(colunas)}) VALUES ({marcas})",
                                   [tuple(l.get(c) for c in colunas) for l in linhas])
         local.commit()
+        self._versao_local = self._ler_versao_local()
         self._salvar_cache()
+
+    def _sincronizar(self, tabelas=TABELAS_SINCRONIA):
+        """Copia as tabelas do Supabase para a memória. Só funciona online."""
+        self._copia()
+        self._aplicar(self._buscar(tabelas))
+
+    # ----- conferência em segundo plano (usada pela interface) -----
+
+    def buscar_mudancas(self):
+        """Só rede, para rodar fora da thread da interface. Devolve None se nada mudou; senão
+        um pacote para aplicar_mudancas (dados novos, aviso de queda ou de volta da conexão)."""
+        if self._local is None:
+            return None
+        base = self._versao_local
+        if not self._online:
+            if time.time() - self._ultima_tentativa < INTERVALO_TENTATIVA:
+                return None
+            self._ultima_tentativa = time.time()
+        try:
+            linhas = self.cliente.executar("SELECT valor FROM meta WHERE chave = %s", ["versao"])["linhas"]
+            if not self._online:
+                return {"reconectar": True}  # a internet voltou: a thread da interface reenvia a fila
+            if (linhas[0]["valor"] if linhas else 0) == base:
+                return None
+            return {"base": base, "tabelas": self._buscar(TABELAS_SINCRONIA)}
+        except ERROS_CONEXAO:
+            return None if not self._online else {"offline": True}
+
+    def aplicar_mudancas(self, pacote):
+        """Na thread da interface: aplica o que buscar_mudancas trouxe. True se a cópia mudou."""
+        if not pacote:
+            return False
+        if pacote.get("offline"):
+            self._cair_offline()
+            return False
+        if pacote.get("reconectar"):
+            self._ultima_tentativa = 0.0
+            return self._tentar_reconectar()
+        if pacote["base"] != self._versao_local:
+            return False  # a própria interface gravou enquanto a busca estava no ar: busca de novo
+        self._aplicar(pacote["tabelas"])
+        return True
 
     # ----- fila de pendências (criptografada) -----
 
@@ -297,6 +366,8 @@ class BancoPostgres:
 
     def _verificar(self):
         """Online: confere se o Supabase mudou por fora. Offline: tenta reconectar."""
+        if not self.verificar_nas_consultas:
+            return  # a interface confere em segundo plano (buscar_mudancas)
         if not self._online:
             self._tentar_reconectar()
             return
