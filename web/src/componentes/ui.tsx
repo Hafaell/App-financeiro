@@ -124,7 +124,9 @@ export function Modal({ titulo, aberto, fechar, children, largo }: {
     <dialog
       ref={ref}
       className={`modal${largo ? ' modal-largo' : ''}`}
-      onClose={fechar}
+      // Só avisa quando foi o usuário que fechou (Esc). Se o pai mandou fechar (aberto=false),
+      // o evento não pode desfazer o que o pai acabou de decidir (ex.: abrir o formulário escolhido).
+      onClose={() => aberto && fechar()}
       onClick={(e) => e.target === ref.current && fechar()}
       aria-label={titulo}
     >
