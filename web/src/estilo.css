@@ -273,6 +273,10 @@ button.linha:hover { background: var(--primaria-clara); }
 
 .modal { border: none; border-radius: 16px; padding: 0; width: min(480px, calc(100vw - 32px)); max-height: calc(100vh - 48px); box-shadow: var(--sombra-modal); background: var(--superficie); color: var(--texto); }
 .modal-largo { width: min(720px, calc(100vw - 32px)); }
+/* Com um pop-up aberto, a página de trás fica travada; só o pop-up rola (e não repassa a rolagem). */
+html:has(dialog[open]), html:has(dialog[open]) body { overflow: hidden; overscroll-behavior: none; }
+.modal { overflow-y: auto; overscroll-behavior: contain; }
+.modal::backdrop { touch-action: none; }
 .modal::backdrop { background: rgba(18, 59, 58, 0.45); }
 .modal-corpo { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 16px; }
 .modal-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
