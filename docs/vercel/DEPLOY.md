@@ -33,7 +33,9 @@ com histórico de caixinhas indica que sim). O `05` é o que libera o cadastro d
 | `SUPABASE_CHAVE` | chave **pública** (anon / publishable) | mesmo lugar |
 | `VITE_SUPABASE_URL` | igual a `SUPABASE_URL` | (o site só enxerga variáveis com `VITE_`) |
 | `VITE_SUPABASE_CHAVE` | igual a `SUPABASE_CHAVE` | |
-| `TZ` | `America/Sao_Paulo` | para o mês atual e as datas não saírem no fuso de Londres |
+
+O fuso de São Paulo é definido no `api/index.py` (o Vercel não deixa cadastrar `TZ`, nome
+reservado); para outro fuso, use a variável `FINANCAS_FUSO`.
 
 **Nunca** coloque a chave `service_role` / secreta no Vercel: o site não precisa dela, porque
 toda leitura e gravação usa o login do próprio usuário (RLS).
@@ -52,7 +54,8 @@ direto.
 
 ## 5. Testar
 
-1. Abra `https://<seu-site>/api/saude`: deve responder `{"ok":true}` (a API está no ar).
+1. Abra `https://<seu-site>/api/saude`: deve responder `{"ok":true,"fuso":"-03 -0300"}` (a API está no ar,
+   no fuso de São Paulo).
 2. Abra o site e entre com o e-mail e a senha do app desktop.
 3. Lance algo no site e veja aparecer no desktop (e vice-versa).
 

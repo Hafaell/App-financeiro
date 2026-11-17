@@ -110,8 +110,9 @@ def _existe(item, mensagem):
 
 @app.get("/api/saude")
 def saude():
-    """Confere se a função está no ar (não toca no Supabase)."""
-    return {"ok": True}
+    """Confere se a função está no ar (não toca no Supabase). Mostra o fuso em uso."""
+    import time
+    return {"ok": True, "fuso": time.strftime("%Z %z")}
 
 
 @app.get("/api/versao")

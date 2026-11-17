@@ -188,6 +188,7 @@ app-financeiro/
 - **Limite da função**: 250 MB descompactada. Sem PySide6 a API fica bem abaixo disso [Certa].
 - **Fuso horário**: o servidor do Vercel roda em UTC. `mes_do_calendario()` e datas de
   lançamento usam o relógio do servidor; perto da meia-noite do dia 1 o mês pode sair errado.
-  Definir `TZ=America/Sao_Paulo` nas variáveis de ambiente [Provável que resolva].
+  Resolvido no `api/index.py` (define `TZ=America/Sao_Paulo` e chama `time.tzset()`), porque o
+  Vercel reserva o nome `TZ` nas variáveis de ambiente.
 - **Branches divergentes**: correções em `nucleo/` feitas na `Develop` precisam ser trazidas
   para a `Vercel` com `git merge Develop` de tempos em tempos.

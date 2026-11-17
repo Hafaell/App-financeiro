@@ -18,7 +18,7 @@ def cliente(tmp_path):
 
 
 def test_saude_nao_precisa_de_login():
-    assert TestClient(api.app).get("/api/saude").json() == {"ok": True}
+    assert TestClient(api.app).get("/api/saude").json()["ok"] is True
 
 
 def test_sem_token_responde_401():
