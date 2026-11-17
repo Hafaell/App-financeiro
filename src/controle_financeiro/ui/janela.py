@@ -1,7 +1,9 @@
 """Janela principal: menu em seções, mês, conta, atalhos e atualização automática."""
+import threading
+import traceback
 from datetime import datetime
 
-from PySide6.QtCore import QSettings, QTimer, Qt
+from PySide6.QtCore import QObject, QSettings, QTimer, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QFrame, QHBoxLayout, QLabel,
@@ -26,9 +28,18 @@ from controle_financeiro.ui.paginas.visao import VisaoPage
 from controle_financeiro.ui.seletor_mes import MesSeletor
 from controle_financeiro.ui.tema import AMARELO_TEXTO, TEXTO_SUAVE, VERDE_TEXTO, VERMELHO_TEXTO
 
+class _Conferencia(QObject):
+    """Leva o resultado da conferência do Supabase (feita em outra thread) para a thread da tela."""
+    pronto = Signal(object)
+
+
 class Janela(QMainWindow):
     def __init__(self):
         super().__init__()
+        self._conferencia = _Conferencia(self)
+        self._conferencia.pronto.connect(self._conferiu)
+        self._conferindo = False
+        self._configurar_banco()
         self.setWindowTitle("Controle Financeiro")
         self.setMinimumSize(1060, 680)
         self.resize(1240, 800)
@@ -253,6 +264,7 @@ class Janela(QMainWindow):
         QApplication.quit()
 
     def _mudou_usuario(self):
+        self._configurar_banco()
         self.conta_nome.setText(auth().nome_exibicao())
         self.seletor.recarregar()
         self.atualizar_tudo()
@@ -404,7 +416,46 @@ class Janela(QMainWindow):
         self.paginas.widget(indice).atualizar()
         self._desatualizadas.discard(indice)
 
+    @staticmethod
+    def _configurar_banco():
+        """Com o Supabase, ler é só a cópia em memória: a tela nunca espera a rede para mostrar
+        algo. A conferência de mudanças externas roda em segundo plano (_verificar)."""
+        banco = fin().banco
+        if hasattr(banco, "buscar_mudancas"):
+            banco.verificar_nas_consultas = False
+
     def _verificar(self):
+        """A cada 1,5 s: confere se algo mudou por fora (ex.: a Ayla gravou)."""
+        banco = fin().banco
+        if not hasattr(banco, "buscar_mudancas"):  # banco local: só ler a versão do arquivo
+            self._depois_de_conferir()
+            return
+        if self._conferindo:  # a conferência anterior ainda está na rede
+            return
+        self._conferindo = True
+        threading.Thread(target=self._conferir_em_segundo_plano, args=(banco,), daemon=True).start()
+
+    def _conferir_em_segundo_plano(self, banco):
+        """Roda fora da thread da tela: só usa a rede, nunca mexe em widgets nem na cópia."""
+        try:
+            pacote = banco.buscar_mudancas()
+        except Exception:  # erro inesperado não derruba o app; a próxima rodada tenta de novo
+            traceback.print_exc()  # mas fica registrado, em vez de sumir em silêncio
+            pacote = None
+        try:
+            self._conferencia.pronto.emit((banco, pacote))
+        except RuntimeError:  # a janela já foi fechada
+            pass
+
+    def _conferiu(self, resultado):
+        banco, pacote = resultado
+        self._conferindo = False
+        if banco is not fin().banco:  # o usuário trocou de conta enquanto a busca rodava
+            return
+        banco.aplicar_mudancas(pacote)
+        self._depois_de_conferir()
+
+    def _depois_de_conferir(self):
         v = fin().versao()
         if v != self._versao:
             self.seletor.recarregar()

@@ -4,6 +4,8 @@ Não há senha do banco no computador: só a URL do projeto e a chave pública (
 Cada comando SQL vai à função executar_sql (ou executar_lote), que roda com as permissões
 do usuário logado. As regras de acesso (RLS) garantem que cada um só vê os próprios dados.
 """
+import threading
+
 import requests
 
 TEMPO_LIMITE = 10  # segundos
@@ -31,6 +33,11 @@ class ClienteSupabase:
         self._refresh = None
         self.usuario_email = None
         self.ao_renovar = ao_renovar  # função(refresh, email): guarda o novo refresh token
+        # Uma Session reaproveita a conexão HTTPS (sem refazer TCP + TLS a cada chamada: ~340 ms
+        # contra ~20 ms). A trava deixa a interface e a verificação em segundo plano usarem a
+        # mesma conexão, uma de cada vez.
+        self._sessao = requests.Session()
+        self._trava = threading.Lock()
 
     # ----- login -----
 
@@ -118,8 +125,9 @@ class ClienteSupabase:
                 raise SessaoExpirada("Entre com seu usuário e senha.")
             cabecalhos["Authorization"] = f"Bearer {self._token}"
         try:
-            resp = requests.request(metodo, self.url + caminho, json=corpo,
-                                    headers=cabecalhos, timeout=TEMPO_LIMITE)
+            with self._trava:
+                resp = self._sessao.request(metodo, self.url + caminho, json=corpo,
+                                            headers=cabecalhos, timeout=TEMPO_LIMITE)
         except requests.RequestException as e:
             raise ErroConexao("Não consegui falar com o Supabase. Verifique a internet.") from e
         if resp.status_code == 401 or (not autenticar and resp.status_code in (400, 401)

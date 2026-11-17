@@ -83,8 +83,11 @@ Ayla começariam a discordar nos totais. Reaproveitar `nucleo/` mantém **uma s�
    - `_salvar_cache` e `_carregar_cache` viram no-op;
    - fila offline só em memória; se o Supabase falhar, a requisição **falha** (sem modo offline:
      o navegador mostra o erro e o usuário tenta de novo);
-   - cópia em memória carregada **uma vez por requisição** (um `executar_lote` com todos os
-     `SELECT`, uma ida só ao Supabase em vez de 11).
+   - cópia em memória carregada **uma vez por requisição**. O `BancoPostgres._buscar` já baixa
+     todas as tabelas num `executar_lote` só (e cai para uma por vez se faltar uma tabela
+     opcional), então o `BancoWeb` só reaproveita;
+   - `verificar_nas_consultas = False`: a cópia acabou de ser baixada, não precisa conferir
+     `meta.versao` a cada leitura (mesma chave que a interface desktop desliga para ler sem rede).
    Assim as consultas continuam rodando na cópia SQLite em memória, exatamente como no desktop,
    e nenhuma linha de SQL de `nucleo/` precisa mudar.
 4. **Cópias antes da virada**: `Ferramentas.backup_automatico` hoje grava arquivo. Na web,
@@ -96,7 +99,7 @@ Ayla começariam a discordar nos totais. Reaproveitar `nucleo/` mantém **uma s�
 | Camada | Mudança |
 |---|---|
 | `nucleo/` | Nenhuma nas regras. Só `virar_mes` / `backup_automatico` ganham destino alternativo para a cópia. |
-| `dados/` | Novo `banco_web.py`. `banco.py` e `nuvem.py` ficam iguais. |
+| `dados/` | Novo `banco_web.py`. `banco.py` e `nuvem.py` ficam como estão: o lote de SELECTs, a `Session` HTTP reaproveitada e a conferência em segundo plano (`buscar_mudancas` / `aplicar_mudancas`, só do desktop) já servem. |
 | `seguranca/` | Não usado pela web. |
 | `ui/` | Não usado pela web (fica no repositório para o desktop; o `.vercelignore` exclui). |
 | `servidor_claude/` | Não muda. |
@@ -136,7 +139,8 @@ App-financeiro/
       PySide6). Se usar o `pyproject.toml` [Adivinhando qual tem prioridade], mover o PySide6
       para um extra `desktop` nesta branch
 - [ ] Criar `dados/banco_web.py` (`BancoWeb`) + testes em `tests/test_banco_web.py`
-      (com um servidor falso, como `tests/test_nuvem.py` já faz)
+      (reaproveitar o `ServidorFalso` de `tests/test_desempenho.py`, que já conta as chamadas
+      ao Supabase: abrir a cópia deve custar uma chamada só)
 - [ ] `api/index.py`: `GET /api/saude`, `GET /api/meses`, `GET /api/resumo`
 - [ ] Conferir que `config.py` não quebra no Vercel (`LOCALAPPDATA` não existe; cai em `~`, que
       é só leitura). Na web, apontar `PASTA` para `/tmp` por variável de ambiente
