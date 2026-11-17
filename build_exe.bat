@@ -8,7 +8,7 @@ cd /d "%~dp0"
 set PYTHONPATH=%CD%\src
 
 REM PyInstaller atualizado: versoes antigas caem mais em listas de bloqueio dos antivirus.
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.desktop.txt
 if errorlevel 1 goto erro
 python -m pip install --upgrade pyinstaller
 if errorlevel 1 goto erro

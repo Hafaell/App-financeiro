@@ -4,7 +4,8 @@ Este documento descreve como levar o Controle Financeiro (hoje um app desktop em
 para um site hospedado no Vercel, usando **os mesmos dados do Supabase** e **as mesmas regras
 de negócio** do app desktop e da Ayla.
 
-Status: **fase 0 (estrutura e documentação)**. Nada aqui ainda funciona como site.
+Status: **fases 0 a 3 prontas** na branch `Vercel` (API completa, `BancoWeb`, cópias no Supabase e o site
+em `web/`). Falta a fase 4 (publicar): veja `DEPLOY.md`.
 
 Documentos desta pasta:
 
@@ -31,7 +32,7 @@ programas que rodam a cada requisição e somem depois). Ele não roda programas
 | `dados/conexao.py` (token pessoal para achar o projeto) | **Não precisa** | No site, a URL e a chave pública do Supabase vêm de variáveis de ambiente do Vercel. |
 | Cópias automáticas antes da virada (`.cfauto` em disco) | **Com ajuste** | Disco do Vercel não guarda nada. Precisa ir para o Supabase (Storage ou tabela). |
 | `servidor_claude/` (MCP da Ayla, stdio) | **Fica no PC** | Continua igual. Pode virar MCP remoto no futuro (fora do escopo). |
-| `requirements.txt` com `PySide6` | **Quebra o deploy** | O Vercel instala o `requirements.txt` da raiz; o PySide6 passa de 250 MB (limite da função). Nesta branch ele terá só as dependências da API. |
+| `requirements.txt` com `PySide6` | **Quebrava o deploy** | O Vercel instala o `requirements.txt` ou o `pyproject.toml`; o PySide6 é enorme. Resolvido: os dois têm só o da web, e o desktop instala os extras `desktop` e `claude`. |
 
 Ponto a favor [Certa]: o app já fala com o Supabase **só por HTTP** (funções `executar_sql` e
 `executar_lote`, com RLS por `user_id`). Ou seja, a parte difícil (banco na nuvem, isolamento
@@ -91,95 +92,89 @@ Ayla começariam a discordar nos totais. Reaproveitar `nucleo/` mantém **uma s�
    Assim as consultas continuam rodando na cópia SQLite em memória, exatamente como no desktop,
    e nenhuma linha de SQL de `nucleo/` precisa mudar.
 4. **Cópias antes da virada**: `Ferramentas.backup_automatico` hoje grava arquivo. Na web,
-   gravar no Supabase Storage (bucket privado `backups`, pasta por `user_id`) ou numa tabela
-   `backups` (JSON). Decisão pendente (veja seção 5).
+   gravar numa tabela `backups` do Supabase (JSON, isolada por usuário pelo RLS). Feito em
+   `nucleo/copias.py` (`CopiasNoBanco`); o desktop segue com arquivos (`CopiasEmPasta`).
 
 ### O que muda em cada camada
 
 | Camada | Mudança |
 |---|---|
-| `nucleo/` | Nenhuma nas regras. Só `virar_mes` / `backup_automatico` ganham destino alternativo para a cópia. |
+| `nucleo/` | Nenhuma nas regras. `virar_mes` e `restaurar_backup` usam `self.copias` (pasta ou tabela); `gerar_backup` devolve o `.cfbak` em bytes. |
 | `dados/` | Novo `banco_web.py`. `banco.py` e `nuvem.py` ficam como estão: o lote de SELECTs, a `Session` HTTP reaproveitada e a conferência em segundo plano (`buscar_mudancas` / `aplicar_mudancas`, só do desktop) já servem. |
 | `seguranca/` | Não usado pela web. |
 | `ui/` | Não usado pela web (fica no repositório para o desktop; o `.vercelignore` exclui). |
 | `servidor_claude/` | Não muda. |
-| Supabase | Adicionar o domínio do Vercel em Authentication > URL Configuration. Talvez um script `08_backups_web.sql`. |
+| Supabase | Adicionar o domínio do Vercel em Authentication > URL Configuration. Script `08_backups_web.sql` (tabela `backups`). |
 
 ---
 
 ## 3. Estrutura da branch
 
 ```
-App-financeiro/
-├── api/
-│   └── index.py              # FastAPI (esqueleto; rotas na fase 2)
-├── web/                      # frontend React (criado na fase 3)
-│   └── README.md
-├── src/controle_financeiro/  # mesmo pacote do desktop (nucleo/ é reaproveitado)
+app-financeiro/
+├── api/index.py              # Vercel Function: só importa o app de src/controle_financeiro/web/api.py
+├── web/                      # site (Vite + React + TypeScript); npm run build gera web/dist
+│   ├── src/paginas/          # uma tela por arquivo, as mesmas do desktop
+│   ├── src/componentes/      # estrutura (menu, seletor de mês), formulários e peças de tela
+│   ├── src/lib/              # api.ts (fetch com o token), estado.tsx, formato.ts, supabase.ts
+│   └── public/fontes/        # Manrope CF (a mesma fonte do desktop)
+├── src/controle_financeiro/
+│   ├── web/api.py            # rotas FastAPI (uma por método da fachada)
+│   ├── web/local.py          # API local com SQLite e dados de exemplo
+│   ├── dados/banco_web.py    # BancoPostgres sem disco e sem modo offline
+│   └── nucleo/copias.py      # cópias: arquivo (desktop) ou tabela backups (web)
+├── supabase/migracoes/08_backups_web.sql
 ├── docs/vercel/              # esta documentação
-├── vercel.json               # build do front, rewrites e config da função Python
+├── vercel.json               # build do site, rewrites e config da função Python
 ├── .vercelignore             # deixa de fora ui/, assets/, tests/, instalador...
-└── requirements.web.txt      # dependências só da API (vira requirements.txt na fase 1)
+├── requirements.txt          # só o da web (o Vercel instala este)
+└── requirements.desktop.txt  # app desktop e Ayla (build_exe.bat)
 ```
 
 ---
 
 ## 4. Fases
 
-### Fase 0: estrutura e documentação (esta)
-- [x] Diagnóstico do que roda ou não no Vercel
-- [x] Arquitetura e mapa de rotas (`API.md`)
-- [x] Passo a passo de deploy (`DEPLOY.md`)
-- [x] Esqueleto: `vercel.json`, `.vercelignore`, `api/index.py`, `requirements.web.txt`
+### Fase 0: estrutura e documentação (feita)
+- [x] Diagnóstico, arquitetura, mapa de rotas (`API.md`) e passo a passo (`DEPLOY.md`)
 
-### Fase 1: backend mínimo no ar
-- [ ] Trocar `requirements.txt` da raiz pelo conteúdo de `requirements.web.txt`
-      (sem PySide6 e sem `mcp`) **somente nesta branch**
-- [ ] Conferir se o Vercel instala pelo `requirements.txt` ou pelo `pyproject.toml` (que lista
-      PySide6). Se usar o `pyproject.toml` [Adivinhando qual tem prioridade], mover o PySide6
-      para um extra `desktop` nesta branch
-- [ ] Criar `dados/banco_web.py` (`BancoWeb`) + testes em `tests/test_banco_web.py`
-      (reaproveitar o `ServidorFalso` de `tests/test_desempenho.py`, que já conta as chamadas
-      ao Supabase: abrir a cópia deve custar uma chamada só)
-- [ ] `api/index.py`: `GET /api/saude`, `GET /api/meses`, `GET /api/resumo`
-- [ ] Conferir que `config.py` não quebra no Vercel (`LOCALAPPDATA` não existe; cai em `~`, que
-      é só leitura). Na web, apontar `PASTA` para `/tmp` por variável de ambiente
-- [ ] Primeiro deploy de teste (preview) e chamada com um JWT real
+### Fase 1: backend mínimo (feita)
+- [x] Dependências: o PySide6 e o `mcp` viraram extras (`desktop`, `claude`) no `pyproject.toml`;
+      o `requirements.txt` da raiz tem só o da web, e o desktop usa `requirements.desktop.txt`
+- [x] `dados/banco_web.py` (`BancoWeb`) + `tests/test_banco_web.py` (abrir = 3 chamadas na primeira
+      vez, 1 depois; gravar sem rede falha em vez de ir para a fila; nada em disco)
+- [x] `config.py`: `FINANCAS_PASTA` (o `api/index.py` aponta para `/tmp`)
 
-### Fase 2: API completa
-- [ ] Todas as rotas de `API.md`, com validação (Pydantic) e erros em português
-- [ ] `ValueError` das regras → HTTP 400 com a mensagem; `SessaoExpirada` → 401;
-      `ErroConexao` → 503
-- [ ] Testes das rotas com `fastapi.testclient` + SQLite (mesmo esquema de `tests/conftest.py`)
-- [ ] Cópia antes da virada no Supabase (Storage ou tabela)
+### Fase 2: API completa (feita)
+- [x] Todas as rotas de `API.md` em `web/api.py`, com validação (Pydantic) e erros em português
+- [x] Testes das rotas em `tests/test_api.py` (`fastapi.testclient` + SQLite)
+- [x] Cópia antes da virada na tabela `backups` (`nucleo/copias.py`, script `08_backups_web.sql`);
+      o desktop continua com arquivos (`CopiasEmPasta`)
 
-### Fase 3: frontend
-- [ ] `npm create vite@latest web -- --template react-ts`
-- [ ] Login / cadastro (supabase-js), sessão guardada pelo próprio supabase-js
-- [ ] Telas na ordem de uso: Visão geral → Transações → Receitas e despesas → Empréstimos →
-      Caixinhas → Planejamento → Comparativo → Ferramentas (as mesmas seções do menu do desktop)
-- [ ] Tema com os mesmos tokens de `ui/tema.py` (`TINTA`, `PRIMARIA`, `MENTA`, `DESPESA`) e
-      fonte Manrope (`assets/fontes/`, licença OFL)
-- [ ] Valores em R$ no formato brasileiro (`Intl.NumberFormat('pt-BR', {style:'currency', currency:'BRL'})`)
-- [ ] "Desfazer" após apagar: o front guarda a linha apagada por 30 s e chama `POST /api/recolocar`
+### Fase 3: frontend (feita)
+- [x] `web/`: Vite + React + TypeScript, login e cadastro pelo supabase-js
+- [x] Todas as telas do desktop: Visão geral, Transações, Receitas e despesas, Planejamento,
+      Comparativo, Empréstimos, Caixinhas, Importar extrato e Ferramentas (busca, meses e virada,
+      renda, cartões, categorias, cópias, backup com senha, relatório para imprimir/PDF, conta)
+- [x] Celular primeiro: barra inferior com botão "Lançar"; no PC, a lateral com as seções do desktop
+- [x] Tema com os tokens de `ui/tema.py` e a fonte Manrope CF (`web/public/fontes`, OFL)
+- [x] "Desfazer" depois de apagar (30 s), atualização automática quando outro aparelho muda algo
+- [x] Modo local com dados de exemplo (`python -m controle_financeiro.web.local` + `npm run dev:local`)
+- [x] CI: job `site` no `testes.yml` roda `npm ci && npm run build`
 
-### Fase 4: produção
-- [ ] Domínio, variáveis de ambiente de produção, URL do site no Supabase Auth
-- [ ] CI: job extra no `testes.yml` para `npm run build` do `web/`
-- [ ] Atualizar README e CLAUDE.md com a existência da versão web
+### Fase 4: produção (com você)
+- [ ] Rodar `08_backups_web.sql`, criar o projeto no Vercel, variáveis e URL no Supabase (`DEPLOY.md`)
+- [ ] Domínio próprio, se quiser
 
 ---
 
-## 5. Decisões pendentes (perguntar ao Rafael antes de implementar)
+## 5. Decisões tomadas
 
-1. **Nome da branch**: hoje o trabalho está em `claude/sharp-mendel-hff020` (branch exigida
-   por esta sessão). Se quiser uma branch chamada `vercel`, basta criar a partir desta.
-2. **Cópias antes da virada na web**: Supabase Storage (arquivo criptografado, igual ao
-   desktop) ou tabela `backups` (mais simples, sem criptografia própria; o RLS isola por usuário).
-3. **Importar extrato** e **exportar backup com senha** (`.cfbak`): entram na fase 2/3 ou
-   ficam só no desktop?
-4. **Cadastro de conta pelo site**: liberado (como no desktop, script `05`) ou só login?
-5. **Escopo do celular**: o site precisa de todas as telas ou só consulta + lançar compra?
+1. **Branch**: `Vercel` (produção do site).
+2. **Cópias antes da virada na web**: tabela `backups` no Supabase (JSON, RLS por usuário, 6 por motivo).
+3. **Importar extrato, exportar backup com senha e restaurar cópias**: no site também.
+4. **Cadastro de conta pelo site**: liberado (login e cadastro).
+5. **Escopo**: todas as telas.
 
 ---
 
@@ -195,4 +190,4 @@ App-financeiro/
   lançamento usam o relógio do servidor; perto da meia-noite do dia 1 o mês pode sair errado.
   Definir `TZ=America/Sao_Paulo` nas variáveis de ambiente [Provável que resolva].
 - **Branches divergentes**: correções em `nucleo/` feitas na `Develop` precisam ser trazidas
-  para esta branch com `git merge Develop` de tempos em tempos.
+  para a `Vercel` com `git merge Develop` de tempos em tempos.

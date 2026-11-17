@@ -84,6 +84,15 @@ TABELAS = [
         chave TEXT PRIMARY KEY,
         valor INTEGER NOT NULL
     )""",
+    # Cópias de segurança da versão web (antes da virada e antes de restaurar). Não entra na
+    # cópia em memória (TABELAS_SINCRONIA): é lida e gravada direto no banco, só quando usada.
+    """CREATE TABLE IF NOT EXISTS backups (
+        id {ID},
+        criado_em TEXT NOT NULL,
+        motivo TEXT NOT NULL,
+        detalhe TEXT NOT NULL DEFAULT '',
+        dados TEXT NOT NULL
+    )""",
 ]
 
 # Tabelas com coluna id (usadas para devolver o id de um lançamento novo)
@@ -93,6 +102,9 @@ TABELAS_COM_ID = ("compras", "receitas", "despesas", "caixinhas", "pagamentos", 
 # Tabelas que dependem de um script novo no Supabase. Enquanto o script não for rodado,
 # o app abre normalmente e só a função que usa a tabela fica desligada.
 TABELAS_OPCIONAIS = {"movimentos_caixinha": "07_historico_caixinhas.sql"}
+# Lida direto no Supabase (sem a cópia em memória); só a versão web usa.
+TABELA_BACKUPS = "backups"
+SCRIPT_BACKUPS = "08_backups_web.sql"
 
 
 def comandos(dialeto: str):

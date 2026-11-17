@@ -1,9 +1,17 @@
 # Passo a passo: colocar no Vercel
 
-O que **você** (Rafael) faz fora do código. Os passos 1 a 3 podem ser feitos já; o deploy
-só vai mostrar algo útil a partir da fase 1 (veja `PLANO.md`).
+O que **você** (Rafael) faz fora do código. O código da branch `Vercel` já está pronto para isso.
 
-## 1. Conta e projeto no Vercel
+## 1. Supabase: rodar o script novo
+
+No SQL Editor do Supabase, rode `supabase/migracoes/08_backups_web.sql` (uma vez). Ele cria a
+tabela das cópias de segurança que o site salva antes de virar o mês. Sem ele o site funciona,
+mas não deixa virar o mês (a cópia falharia e, por segurança, o mês não vira).
+
+Confira também se os scripts `01`, `03`, `05`, `06` e `07` já rodaram (o app desktop funcionando
+com histórico de caixinhas indica que sim). O `05` é o que libera o cadastro de contas novas.
+
+## 2. Conta e projeto no Vercel
 
 1. Crie a conta em vercel.com entrando **com o GitHub**.
 2. *Add New… > Project* e importe o repositório `hafaell/app-financeiro`.
@@ -11,54 +19,78 @@ só vai mostrar algo útil a partir da fase 1 (veja `PLANO.md`).
 3. Na tela de configuração:
    - **Framework Preset**: `Other` (o `vercel.json` já diz como montar).
    - **Root Directory**: deixe a raiz do repositório.
-   - Não clique em Deploy ainda se as variáveis do passo 2 não estiverem prontas.
-4. Em *Settings > Git*, defina **Production Branch** como a branch da versão web
-   (hoje `claude/sharp-mendel-hff020`; ou `vercel`, se você criar uma com esse nome).
+   - Abra **Environment Variables** e cadastre as do passo 3 **antes** de clicar em Deploy.
+4. Depois de criado, em *Settings > Git*, defina **Production Branch** como `Vercel`.
    Assim, enviar código para `Develop` ou `master` **não** mexe no site.
-   Outras branches ainda geram *previews*; se não quiser, use *Settings > Git > Ignored Build
-   Step* com: `if [ "$VERCEL_GIT_COMMIT_REF" = "vercel" ]; then exit 1; else exit 0; fi`
-   (troque `vercel` pelo nome da branch web).
+   As outras branches ainda geram *previews*; se não quiser, use *Settings > Git > Ignored Build
+   Step* com: `if [ "$VERCEL_GIT_COMMIT_REF" = "Vercel" ]; then exit 1; else exit 0; fi`
 
-## 2. Variáveis de ambiente (Vercel > Settings > Environment Variables)
+## 3. Variáveis de ambiente (Vercel > Settings > Environment Variables)
 
 | Nome | Valor | Onde achar |
 |---|---|---|
 | `SUPABASE_URL` | `https://<ref>.supabase.co` | Supabase > Project Settings > API |
 | `SUPABASE_CHAVE` | chave **pública** (anon / publishable) | mesmo lugar |
-| `VITE_SUPABASE_URL` | igual a `SUPABASE_URL` | (o front só enxerga variáveis com `VITE_`) |
+| `VITE_SUPABASE_URL` | igual a `SUPABASE_URL` | (o site só enxerga variáveis com `VITE_`) |
 | `VITE_SUPABASE_CHAVE` | igual a `SUPABASE_CHAVE` | |
-| `FINANCAS_BANCO` | `postgres` | |
-| `TZ` | `America/Sao_Paulo` | para o mês atual não virar errado à noite |
+| `TZ` | `America/Sao_Paulo` | para o mês atual e as datas não saírem no fuso de Londres |
 
-**Nunca** coloque a chave `service_role` / secreta no Vercel: o app não precisa dela, porque
-toda leitura e gravação usa o login do próprio usuário (RLS) [Certa].
+**Nunca** coloque a chave `service_role` / secreta no Vercel: o site não precisa dela, porque
+toda leitura e gravação usa o login do próprio usuário (RLS).
 
-## 3. Supabase
+As variáveis `VITE_` entram no site na hora do build: se mudar alguma, faça *Redeploy*.
 
-1. *Authentication > URL Configuration*:
-   - **Site URL**: o endereço do site (ex.: `https://app-financeiro.vercel.app`).
-   - **Redirect URLs**: o mesmo endereço e `https://*.vercel.app` se quiser login nos previews.
-2. Confirme que os scripts `01`, `03`, `05`, `06` e `07` de `supabase/migracoes/` já rodaram
-   (o app desktop funcionando com histórico de caixinhas indica que sim).
-3. Se a decisão das cópias for tabela ou Storage, rodar o script `08_*.sql` que será criado na fase 2.
+## 4. Supabase: endereço do site (login e cadastro)
 
-## 4. Desenvolver e testar no seu PC (a partir da fase 1)
+Depois do primeiro deploy, em *Authentication > URL Configuration*:
+- **Site URL**: o endereço do site (ex.: `https://app-financeiro.vercel.app`).
+- **Redirect URLs**: o mesmo endereço, e `https://*.vercel.app` se quiser login nos previews.
 
-```
-npm i -g vercel          # uma vez
-vercel login             # uma vez
-vercel link              # liga a pasta ao projeto do Vercel
-vercel env pull .env     # baixa as variáveis do passo 2 (o .env já está no .gitignore)
-vercel dev               # sobe o site e a API juntos em http://localhost:3000
-```
+O link do e-mail de confirmação de cadastro leva para a **Site URL**. Se a confirmação de e-mail
+estiver desligada (*Authentication > Providers > Email > Confirm email*), a conta nova já entra
+direto.
 
-## 5. Publicar
+## 5. Testar
 
-- Enviar commits para a branch de produção publica sozinho.
-- Cada pull request para ela gera um link de preview para testar antes.
+1. Abra `https://<seu-site>/api/saude`: deve responder `{"ok":true}` (a API está no ar).
+2. Abra o site e entre com o e-mail e a senha do app desktop.
+3. Lance algo no site e veja aparecer no desktop (e vice-versa).
+
+Se a tela disser "Falta configurar o site", faltam as variáveis `VITE_` (passo 3) ou o redeploy.
+Se o login funcionar mas os dados não abrirem, confira `SUPABASE_URL` e `SUPABASE_CHAVE` e veja
+o erro em *Vercel > Deployments > (o deploy) > Functions / Logs*.
+
+## 6. Publicar mudanças
+
+- Enviar commits para a branch `Vercel` publica sozinho.
+- Para trazer correções da `Develop`: `git checkout Vercel && git merge Develop && git push`.
 - Para voltar a uma versão anterior: Vercel > Deployments > (versão boa) > *Promote to Production*.
 
-## 6. O que continua no seu PC
+## 7. Rodar no seu PC
 
-- O app desktop (`ControleFinanceiro.exe`) e a Ayla (servidor MCP) continuam iguais e usam os
-  mesmos dados. Lançar algo no site aparece no desktop em ~1 s, e vice-versa.
+Sem Supabase, com dados de exemplo (bom para mexer no visual):
+
+```
+python -m pip install -e ".[dev]"
+python -m controle_financeiro.web.local            # API em http://127.0.0.1:8000
+cd web && npm install
+npm run dev:local                                  # site em http://localhost:5173
+```
+
+Com os seus dados reais (cuidado: grava de verdade):
+
+```
+npm i -g vercel && vercel login && vercel link     # uma vez
+vercel env pull web/.env.local                     # baixa as variáveis do passo 3
+vercel dev                                         # site e API juntos em http://localhost:3000
+```
+
+## 8. O que continua no seu PC
+
+O app desktop (`ControleFinanceiro.exe`) e a Ayla (servidor MCP) continuam iguais e usam os
+mesmos dados. Lançar algo no site aparece no desktop em ~1 s; o site confere mudanças de fora a
+cada 15 s (e ao voltar para a aba).
+
+As cópias antes da virada ficam em lugares diferentes: o desktop salva em arquivo no PC
+(Ferramentas > Cópias automáticas do app) e o site salva na tabela `backups` do Supabase
+(Ferramentas > Cópias automáticas do site).

@@ -1,11 +1,13 @@
 """Caminhos e constantes do aplicativo.
 
 Os dados ficam em %LOCALAPPDATA%\\ControleFinanceiro, fora da pasta do projeto.
+Na versão web (Vercel), FINANCAS_PASTA aponta para /tmp, o único lugar com escrita.
 """
 import os
 from pathlib import Path
 
-PASTA = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ControleFinanceiro"
+PASTA = (Path(os.environ["FINANCAS_PASTA"]) if os.environ.get("FINANCAS_PASTA")
+         else Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ControleFinanceiro")
 
 # Arquivos criptografados (a chave de criptografia fica em chave.key)
 CHAVE_PATH = PASTA / "chave.key"

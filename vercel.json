@@ -1,11 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd web && npm ci && npm run build",
+  "framework": null,
+  "installCommand": "cd web && npm ci",
+  "buildCommand": "cd web && npm run build",
   "outputDirectory": "web/dist",
   "functions": {
     "api/index.py": {
       "maxDuration": 30,
-      "includeFiles": "src/controle_financeiro/**"
+      "includeFiles": "src/controle_financeiro/**",
+      "excludeFiles": "{src/controle_financeiro/ui/**,src/controle_financeiro/servidor_claude/**,tests/**,web/**,assets/**,build/**,dist/**,docs/**,**/__pycache__/**}"
     }
   },
   "rewrites": [

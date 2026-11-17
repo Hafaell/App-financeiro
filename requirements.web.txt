@@ -1,5 +1,0 @@
-# Dependências só da API web (Vercel). Sem PySide6 (interface desktop) e sem mcp (servidor da Ayla).
-# Na fase 1, este conteúdo substitui o requirements.txt da raiz NESTA branch (o Vercel lê o da raiz).
-fastapi>=0.110
-requests>=2.31
-cryptography>=42

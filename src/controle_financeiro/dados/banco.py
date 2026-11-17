@@ -121,6 +121,19 @@ class BancoSqlite:
     def disponivel(self, tabela):
         return True
 
+    # Tabelas fora da cópia em memória (backups da web). Aqui é o mesmo arquivo, sem somar versão.
+    def consultar_direto(self, sql, args=()):
+        return self.consultar(sql, args)
+
+    def gravar_direto(self, sql, args=()):
+        con = self._abrir()
+        try:
+            with con:
+                cur = con.execute(sql, args)
+            return cur.lastrowid, cur.rowcount
+        finally:
+            con.close()
+
 
 def _sql_para_envio(op):
     """Monta o comando de uma alteração pendente para o Supabase (com o id original)."""
@@ -484,6 +497,18 @@ class BancoPostgres:
     def versao(self):
         self._verificar()
         return self._copia().execute("SELECT valor FROM meta WHERE chave = 'versao'").fetchone()["valor"]
+
+    # ----- tabelas fora da cópia em memória (backups da web): direto no Supabase, sem fila -----
+
+    def consultar_direto(self, sql, args=()):
+        return self.cliente.executar(_pg(sql), list(args))["linhas"]
+
+    def gravar_direto(self, sql, args=()):
+        sql_pg = _pg(sql)
+        if sql.upper().startswith("INSERT") and "RETURNING" not in sql.upper():
+            sql_pg += " RETURNING id"
+        resultado = self.cliente.executar(sql_pg, list(args))
+        return resultado.get("id"), resultado.get("afetadas", 0)
 
     def estado(self):
         """Usado pela tela para mostrar o aviso de sincronização."""

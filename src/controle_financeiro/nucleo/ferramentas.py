@@ -58,19 +58,27 @@ class Ferramentas:
         bruta = hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 200_000)
         return base64.urlsafe_b64encode(bruta)
 
-    def exportar_backup(self, caminho, senha: str) -> str:
-        """Salva todos os dados do usuário num arquivo criptografado com a senha informada."""
+    def gerar_backup(self, senha: str) -> bytes:
+        """Todos os dados do usuário, criptografados com a senha informada (conteúdo do .cfbak)."""
         if len(str(senha or "")) < 6:
             raise ValueError("Use uma senha de pelo menos 6 caracteres para o backup.")
         dados = {t: self.banco.consultar(f"SELECT * FROM {t}") for t in TABELAS_BACKUP}
         dados["_gerado_em"] = date.today().isoformat()
         salt = os.urandom(16)
         token = Fernet(self._chave(senha, salt)).encrypt(json.dumps(dados, default=str).encode("utf-8"))
+        return MAGICO + salt + token
+
+    def exportar_backup(self, caminho, senha: str) -> str:
+        """Salva todos os dados do usuário num arquivo criptografado com a senha informada."""
+        conteudo = self.gerar_backup(senha)
         with open(caminho, "wb") as f:
-            f.write(MAGICO + salt + token)
+            f.write(conteudo)
         return str(caminho)
 
     # ----- cópia automática (antes de ações que não têm volta, como a virada) -----
+
+    def todos_os_dados(self) -> dict:
+        return self._todos_os_dados()
 
     def _todos_os_dados(self) -> dict:
         dados = {t: self.banco.consultar(f"SELECT * FROM {t}") for t in TABELAS_BACKUP}

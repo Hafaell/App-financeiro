@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Comandos
 
 ```
-python -m pip install -e ".[dev]"            # instala o app + pytest e pyflakes
+python -m pip install -e ".[desktop,claude,dev]"  # app desktop + Ayla + pytest e pyflakes
 python -m pytest                              # todos os testes
 python -m pytest tests/test_financas.py::test_nome   # um teste
 python -m pyflakes src tests                  # lint
@@ -65,6 +65,25 @@ Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/se
 - **Conferir no visual:** `tests/test_interface.py` monta a janela com `QT_QPA_PLATFORM=offscreen` e SQLite; o mesmo caminho serve para salvar retratos das páginas com `janela.grab()` (chame `carregar_fontes` antes, senão o retrato sai com outra fonte).
 - **Skills do projeto** (`.claude/skills/`, versões em `skills-lock.json`): `find-skills` (busca skills com `npx skills find`) e `frontend-design` (diretrizes de design, usadas no layout).
 
+## Versão web (branch `Vercel`)
+
+- **Três lados com os mesmos dados:** desktop, Ayla e o site. O site chama a API FastAPI
+  (`web/api.py`, uma rota por método de `Financas`, erros como `{"erro": ...}`); `api/index.py`
+  só a importa para o Vercel. Rota nova: método na fachada primeiro, depois a rota, teste em
+  `tests/test_api.py` (troca `api.financas` por um `Financas` com SQLite) e a linha em `docs/vercel/API.md`.
+- **`BancoWeb`** (`dados/banco_web.py`): o `BancoPostgres` sem disco e sem modo offline. Cada
+  requisição cria um com o JWT do usuário; sem rede, a requisição falha (503) em vez de ir para fila.
+- **Cópias antes da virada:** `Financas(..., copias_no_banco=True)` usa a tabela `backups`
+  (`nucleo/copias.py`, script `08_backups_web.sql`); o desktop segue com arquivos. A tabela fica fora
+  da cópia em memória: é lida e gravada com `consultar_direto` / `gravar_direto`.
+- **Dependências:** a base do `pyproject.toml` e o `requirements.txt` têm só o da web (o Vercel lê os
+  dois). PySide6 e `mcp` são os extras `desktop` e `claude`.
+- **Site (`web/`):** Vite + React + TypeScript, sem biblioteca de componentes. Cores e fonte iguais às de
+  `ui/tema.py` (tokens em `web/src/estilo.css`); celular primeiro (barra inferior com "Lançar"), lateral
+  com as seções do desktop no PC. Login e cadastro pelo supabase-js. `npm run build` checa os tipos.
+- **Ver no PC sem Supabase:** `python -m controle_financeiro.web.local` (SQLite com dados de exemplo) e
+  `cd web && npm run dev:local`.
+
 ## Servidor MCP e skill assistente-financeiro
 
 Cada `@mcp.tool()` em `servidor_claude/servidor.py` é uma ferramenta do Claude Desktop; ao criar ou alterar uma, o servidor precisa ser reiniciado. Categorias e cartões são passados por **nome** nas ferramentas (`_id_da_categoria` converte para id).
@@ -92,7 +111,8 @@ Regras da Ayla que o código deve preservar: consultas nunca alteram dados; escr
 
 ## Fluxo de trabalho
 
-- Branch de trabalho: `Develop` (remoto `origin/Develop`); `master` é a base.
-- CI: `.github/workflows/testes.yml` roda pyflakes e pytest no Windows e no Linux a cada push e pull request.
+- Branch de trabalho: `Develop` (remoto `origin/Develop`); `master` é a base. A `Vercel` é a produção do
+  site: traga a `Develop` para ela com `git merge Develop`.
+- CI: `.github/workflows/testes.yml` roda pyflakes e pytest no Windows e no Linux, e o build do site, a cada push e pull request.
 - Mudou regra de negócio: adicione teste em `tests/test_financas.py` (usa SQLite temporário via `criar_banco("teste")`). O banco de teste é compartilhado entre os testes: use nomes únicos (veja `_virada`) e passe `pasta_backups=tmp_path` ao criar `Financas`. As ferramentas MCP são testadas em `tests/test_servidor.py`.
 - O working tree pode ter alterações do usuário não commitadas: não reverta nem commite sem ele pedir.

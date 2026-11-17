@@ -7,6 +7,7 @@ from datetime import date
 from controle_financeiro.config import PASTA
 from controle_financeiro.dados.banco import criar_banco
 from controle_financeiro.nucleo.caixinhas import Caixinhas
+from controle_financeiro.nucleo.copias import CopiasEmPasta, CopiasNoBanco
 from controle_financeiro.nucleo.ferramentas import Ferramentas
 from controle_financeiro.nucleo.importacao import ler_extrato, marcar_situacao
 from controle_financeiro.nucleo.planejamento import Planejamento
@@ -22,7 +23,7 @@ from controle_financeiro.nucleo.virada import Virada
 
 
 class Financas:
-    def __init__(self, banco, pasta_backups=None):
+    def __init__(self, banco, pasta_backups=None, copias_no_banco=False):
         self.banco = banco
         # Cópias automáticas antes da virada (uma pasta por usuário, fora do projeto)
         self.pasta_backups = pasta_backups or PASTA / "backups"
@@ -38,6 +39,9 @@ class Financas:
         self.resumo = Resumo(banco, self.cartoes, self.meses, self.emprestimos)
         self.ferramentas = Ferramentas(banco, self.meses, self.resumo)
         self.virada = Virada(banco, self.meses)
+        # Desktop: arquivos na pasta; versão web: tabela backups no Supabase
+        self.copias = (CopiasNoBanco(banco, self.ferramentas) if copias_no_banco
+                       else CopiasEmPasta(self.ferramentas, self.pasta_backups))
 
     @classmethod
     def do_usuario(cls, usuario: str, cliente=None) -> "Financas":
@@ -66,8 +70,7 @@ class Financas:
         """Salva uma cópia de todos os dados e só então vira o mês. Se a cópia falhar,
         o mês não é virado. O resultado traz o caminho da cópia em "backup"."""
         try:
-            copia = self.ferramentas.backup_automatico(
-                self.pasta_backups, "antes-da-virada", self.meses.ativo())
+            copia = self.copias.salvar("antes-da-virada", self.meses.ativo())
         except Exception as erro:
             raise ValueError("Não consegui salvar a cópia de segurança, então o mês não foi virado. "
                              f"Motivo: {erro}") from erro
@@ -99,21 +102,21 @@ class Financas:
         return self.compras.atualizar(*args, **kwargs)
 
     def listar_backups(self):
-        return self.ferramentas.listar_backups(self.pasta_backups)
+        return self.copias.listar()
 
-    def restaurar_backup(self, caminho):
-        """Volta todos os dados para os de uma cópia automática. Antes, salva uma cópia do
-        estado atual (para dar para voltar atrás). Devolve o caminho dessa cópia nova."""
-        from controle_financeiro.nucleo.ferramentas import ler_backup_automatico
+    def restaurar_backup(self, ref):
+        """Volta todos os dados para os de uma cópia automática (ref: caminho no desktop, id na
+        web). Antes, salva uma cópia do estado atual (para dar para voltar atrás). Devolve a
+        referência dessa cópia nova."""
         try:
-            dados = ler_backup_automatico(caminho)
+            dados = self.copias.ler(ref)
         except Exception as erro:
             raise ValueError(f"Não consegui abrir a cópia: {erro}") from erro
         estado = self.banco.estado()
         if estado["tipo"] != "local" and not estado["online"]:
             raise ValueError("Sem conexão com o Supabase. Conecte-se à internet para restaurar.")
         try:
-            atual = self.ferramentas.backup_automatico(self.pasta_backups, "antes-de-restaurar")
+            atual = self.copias.salvar("antes-de-restaurar")
         except Exception as erro:
             raise ValueError("Não consegui salvar a cópia de segurança dos dados atuais, então nada "
                              f"foi restaurado. Motivo: {erro}") from erro
@@ -212,6 +215,10 @@ class Financas:
 
     def exportar_backup(self, caminho, senha):
         return self.ferramentas.exportar_backup(caminho, senha)
+
+    def gerar_backup(self, senha) -> bytes:
+        """Conteúdo do arquivo .cfbak (protegido por senha), para o site oferecer como download."""
+        return self.ferramentas.gerar_backup(senha)
 
     def assinaturas(self, mes=None):
         return self.planejamento.assinaturas(mes)

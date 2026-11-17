@@ -68,7 +68,7 @@ controle-financeiro/
 ## Desenvolvimento
 
 ```
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[desktop,claude,dev]"
 python -m pytest
 python -m controle_financeiro
 ```
@@ -76,6 +76,18 @@ python -m controle_financeiro
 Os testes usam um banco SQLite temporário, então não tocam nos dados reais.
 
 Para gerar o executável no Windows, rode `build_exe.bat`.
+
+## Versão web (Vercel)
+
+A branch `Vercel` tem também um site com as mesmas telas e os mesmos dados (celular e PC),
+publicado no Vercel. As regras são as mesmas (`nucleo/`), servidas por uma API em Python
+(`src/controle_financeiro/web/api.py`, chamada pelo `api/index.py`) e mostradas pelo site em
+`web/` (React + TypeScript). Lançar algo no site aparece no app desktop e na Ayla, e vice-versa.
+
+- Como publicar: `docs/vercel/DEPLOY.md`.
+- Rotas da API: `docs/vercel/API.md`. Plano e decisões: `docs/vercel/PLANO.md`.
+- Ver o site no PC com dados de exemplo: `python -m controle_financeiro.web.local` e, em outro
+  terminal, `cd web && npm install && npm run dev:local`.
 
 ## Dados do usuário
 
