@@ -51,16 +51,14 @@ export function CaixaLinha({ selecao, id }: { selecao: Selecao; id: number }) {
 }
 
 /**
- * Botões de apagar em lote de uma lista.
- * `visiveis`: o que está na tela (base do "Apagar selecionadas" e do "Marcar todas").
- * `todas`: o que o "Apagar tudo" apaga (a lista do mês, sem a busca por texto).
+ * Botão "Apagar" de uma lista: liga o modo seleção (marcar um a um ou "Marcar todas").
+ * `visiveis`: o que está na tela (já filtrado pelo cartão e pela busca); é a base do "Marcar todas".
  */
-export function BarraLote({ tabela, itens, selecao, visiveis, todas }: {
+export function BarraLote({ tabela, itens, selecao, visiveis }: {
   tabela: TabelaLote
   itens: [string, string] // [singular, plural], ex.: ['compra', 'compras']
   selecao: Selecao
   visiveis: ItemLote[]
-  todas: ItemLote[]
 }) {
   const { atualizar, avisar } = useEstado()
   const [perguntar, janela] = useConfirmar()
@@ -102,12 +100,9 @@ export function BarraLote({ tabela, itens, selecao, visiveis, todas }: {
           <button className="botao" onClick={selecao.alternarModo}>Cancelar</button>
         </>
       ) : (
-        <>
-          <button className="botao" disabled={visiveis.length === 0} onClick={selecao.alternarModo}>Selecionar</button>
-          <button className="botao perigo-texto" disabled={todas.length === 0} onClick={() => apagar(todas)}>
-            Apagar tudo{todas.length > 0 ? ` (${todas.length})` : ''}
-          </button>
-        </>
+        <button className="botao perigo-texto" disabled={visiveis.length === 0} onClick={selecao.alternarModo}>
+          Apagar
+        </button>
       )}
       {janela}
     </div>

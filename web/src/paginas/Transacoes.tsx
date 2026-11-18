@@ -23,10 +23,6 @@ export function Transacoes() {
       && (!t || c.item.toLowerCase().includes(t) || c.pessoa.toLowerCase().includes(t)))
   }, [dados, cartao, busca])
 
-  // "Apagar tudo" ignora a busca, mas respeita o cartão escolhido
-  const doCartao = useMemo(() => (dados ?? []).filter((c) => !cartao || c.cartao === cartao), [dados, cartao])
-  const itensLote = (l: Compra[]) => l.map((c) => ({ id: c.id, valor: c.valor_parcela }))
-
   const meu = filtradas.filter((c) => !c.emprestimo).reduce((s, c) => s + c.valor_parcela, 0)
   const total = filtradas.reduce((s, c) => s + c.valor_parcela, 0)
 
@@ -47,7 +43,7 @@ export function Transacoes() {
       </div>
 
       <BarraLote tabela="compras" itens={['compra', 'compras']} selecao={selecao}
-        visiveis={itensLote(filtradas)} todas={itensLote(doCartao)} />
+        visiveis={filtradas.map((c) => ({ id: c.id, valor: c.valor_parcela }))} />
 
       {erro && !dados ? <ErroCarga mensagem={erro} tentarDeNovo={tentarDeNovo} /> : !dados ? <Carregando /> : (
         <>
