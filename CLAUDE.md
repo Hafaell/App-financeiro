@@ -54,7 +54,7 @@ Três camadas, sempre nesta direção: `web/` (API do site) e `servidor_claude/`
 ## Versão web (branch `Vercel`)
 
 - **Dois lados com os mesmos dados:** o site e a Ayla. O app desktop (PySide6) foi removido. O site chama a API FastAPI
-  (`web/api.py`, uma rota por método de `Financas`, erros como `{"erro": ...}`); `api/index.py`
+  (`web/api.py`, rotas só do que o site usa, cada uma chamando um método de `Financas`; erros como `{"erro": ...}`); `api/index.py`
   só a importa para o Vercel. Rota nova: método na fachada primeiro, depois a rota, teste em
   `tests/test_api.py` (troca `api.financas` por um `Financas` com SQLite) e a linha em `docs/vercel/API.md`.
 - **`BancoWeb`** (`dados/banco_web.py`): o `BancoPostgres` sem disco e sem modo offline. Cada
@@ -94,6 +94,15 @@ A skill **assistente-financeiro** (a "Ayla", em português, respostas curtas) vi
 | Virada de mês | escrita | `virar_mes`, só a pedido explícito |
 
 Regras da Ayla que o código deve preservar: consultas nunca alteram dados; escritas só a pedido do usuário; nunca inventar dados e perguntar quando pessoa, cartão, valor ou mês forem ambíguos. Ao adicionar ou renomear uma ferramenta MCP, atualize a skill lá.
+
+## Ambiente e configuração
+
+- **Variáveis (Python):** `FINANCAS_BANCO` (`postgres` padrão, `sqlite` nos testes), `FINANCAS_DB` (arquivo SQLite), `FINANCAS_PASTA` (pasta de dados; `/tmp` no Vercel), `FINANCAS_FUSO` (padrão America/Sao_Paulo, aplicado em `api/index.py`), `SUPABASE_URL`/`SUPABASE_CHAVE`/`SUPABASE_PREFIXO` (o Vercel precisa das duas primeiras; o MCP lê `conexao.dat` se não houver).
+- **Variáveis (site):** `VITE_SUPABASE_URL` e `VITE_SUPABASE_CHAVE` no Vercel (ou `web/.env.local`); `VITE_MODO_LOCAL=1` (`web/.env.demo`) liga o modo sem login.
+- **Login da Ayla:** `python -m controle_financeiro.servidor_claude entrar` (guarda só o refresh token; `dados/contexto.py` → `seguranca/autenticacao.py`). Só funciona com Supabase.
+- **Hook do projeto:** `.claude/hooks/pyflakes_hook.py` roda o pyflakes em todo `.py` editado (`.claude/settings.json`); corrija os avisos antes de seguir.
+- **Código removido:** o app desktop (PySide6), seu empacotamento e o login local de testes não existem mais; não recrie.
+- **Docs:** `docs/vercel/` (DEPLOY, API); `supabase/migracoes/` são scripts já executados, não edite.
 
 ## Fluxo de trabalho
 

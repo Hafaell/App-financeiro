@@ -13,7 +13,6 @@ PASTA = (Path(os.environ["FINANCAS_PASTA"]) if os.environ.get("FINANCAS_PASTA")
 CHAVE_PATH = PASTA / "chave.key"
 CONEXAO_PATH = PASTA / "conexao.dat"   # token, projeto e chave pública do Supabase
 SESSAO_PATH = PASTA / "sessao.dat"     # refresh token para o Claude (sem senha)
-USUARIOS_PATH = PASTA / "usuarios.dat"  # usuários do modo local (só testes)
 
 # Banco: "postgres" (Supabase, padrão) ou "sqlite" (local, para testes)
 TIPO_BANCO = os.environ.get("FINANCAS_BANCO") or "postgres"

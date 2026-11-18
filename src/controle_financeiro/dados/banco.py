@@ -171,10 +171,7 @@ class BancoPostgres:
         self.falhas = 0  # alterações que o Supabase recusou ao enviar
         self.indisponiveis = set()  # tabelas opcionais cujo script ainda não rodou no Supabase
         # True: cada leitura confere antes se o Supabase mudou (servidor do Claude, testes).
-        # A interface desliga isto: ler é só a cópia em memória, e a conferência roda em segundo
-        # plano (buscar_mudancas / aplicar_mudancas), sem travar a tela esperando a rede.
         self.verificar_nas_consultas = True
-        self._versao_local = None  # versão da cópia; lida de outra thread, por isso fica em cache
 
     # ----- conexão -----
 
@@ -253,12 +250,7 @@ class BancoPostgres:
                 local.executemany(f"INSERT INTO {tabela} ({','.join(colunas)}) VALUES ({marcas})",
                                   [tuple(l[c] for c in colunas) for l in linhas])
         local.commit()
-        self._versao_local = self._ler_versao_local()
         return True
-
-    def _ler_versao_local(self):
-        linha = self._local.execute("SELECT valor FROM meta WHERE chave = 'versao'").fetchone()
-        return linha["valor"] if linha else 0
 
     def _buscar(self, tabelas):
         """Baixa as tabelas do Supabase. Só rede: não toca na cópia, então pode rodar fora da
@@ -296,50 +288,12 @@ class BancoPostgres:
                 local.executemany(f"INSERT INTO {tabela} ({','.join(colunas)}) VALUES ({marcas})",
                                   [tuple(l.get(c) for c in colunas) for l in linhas])
         local.commit()
-        self._versao_local = self._ler_versao_local()
         self._salvar_cache()
 
     def _sincronizar(self, tabelas=TABELAS_SINCRONIA):
         """Copia as tabelas do Supabase para a memória. Só funciona online."""
         self._copia()
         self._aplicar(self._buscar(tabelas))
-
-    # ----- conferência em segundo plano (usada pela interface) -----
-
-    def buscar_mudancas(self):
-        """Só rede, para rodar fora da thread da interface. Devolve None se nada mudou; senão
-        um pacote para aplicar_mudancas (dados novos, aviso de queda ou de volta da conexão)."""
-        if self._local is None:
-            return None
-        base = self._versao_local
-        if not self._online:
-            if time.time() - self._ultima_tentativa < INTERVALO_TENTATIVA:
-                return None
-            self._ultima_tentativa = time.time()
-        try:
-            linhas = self.cliente.executar("SELECT valor FROM meta WHERE chave = %s", ["versao"])["linhas"]
-            if not self._online:
-                return {"reconectar": True}  # a internet voltou: a thread da interface reenvia a fila
-            if (linhas[0]["valor"] if linhas else 0) == base:
-                return None
-            return {"base": base, "tabelas": self._buscar(TABELAS_SINCRONIA)}
-        except ERROS_CONEXAO:
-            return None if not self._online else {"offline": True}
-
-    def aplicar_mudancas(self, pacote):
-        """Na thread da interface: aplica o que buscar_mudancas trouxe. True se a cópia mudou."""
-        if not pacote:
-            return False
-        if pacote.get("offline"):
-            self._cair_offline()
-            return False
-        if pacote.get("reconectar"):
-            self._ultima_tentativa = 0.0
-            return self._tentar_reconectar()
-        if pacote["base"] != self._versao_local:
-            return False  # a própria interface gravou enquanto a busca estava no ar: busca de novo
-        self._aplicar(pacote["tabelas"])
-        return True
 
     # ----- fila de pendências (criptografada) -----
 
@@ -380,7 +334,7 @@ class BancoPostgres:
     def _verificar(self):
         """Online: confere se o Supabase mudou por fora. Offline: tenta reconectar."""
         if not self.verificar_nas_consultas:
-            return  # a interface confere em segundo plano (buscar_mudancas)
+            return
         if not self._online:
             self._tentar_reconectar()
             return
@@ -526,7 +480,7 @@ def configuracao_supabase():
     if url and chave:
         return url, chave
     if not CONEXAO_PATH.exists():
-        raise RuntimeError("Supabase não configurado. Abra o app e informe o token de acesso.")
+        raise RuntimeError("Supabase não configurado. Rode: python -m controle_financeiro.servidor_claude entrar")
     dados = Cofre().decifrar(CONEXAO_PATH.read_bytes())
     return dados["url"], dados["chave"]
 

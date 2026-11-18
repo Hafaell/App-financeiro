@@ -34,8 +34,7 @@ class ClienteSupabase:
         self.usuario_email = None
         self.ao_renovar = ao_renovar  # função(refresh, email): guarda o novo refresh token
         # Uma Session reaproveita a conexão HTTPS (sem refazer TCP + TLS a cada chamada: ~340 ms
-        # contra ~20 ms). A trava deixa a interface e a verificação em segundo plano usarem a
-        # mesma conexão, uma de cada vez.
+        # contra ~20 ms). A trava deixa as threads usarem a mesma conexão, uma de cada vez.
         self._sessao = requests.Session()
         self._trava = threading.Lock()
 
@@ -50,21 +49,6 @@ class ClienteSupabase:
         self.usuario_email = email
         self._avisar_renovacao()
 
-    def cadastrar(self, email: str, senha: str, nome: str = None) -> bool:
-        """Cria a conta. Devolve True se já entrou (confirmação de e-mail desligada) ou
-        False se é preciso confirmar o e-mail antes de entrar."""
-        corpo = {"email": email, "password": senha}
-        if nome:
-            corpo["data"] = {"nome": nome}  # fica no token como user_metadata.nome
-        dados = self._chamar("POST", "/auth/v1/signup", corpo, autenticar=False)
-        if dados and dados.get("access_token"):
-            self._token = dados["access_token"]
-            self._refresh = dados.get("refresh_token")
-            self.usuario_email = email
-            self._avisar_renovacao()
-            return True
-        return False
-
     def restaurar(self, refresh_token: str, email: str) -> bool:
         """Retoma uma sessão guardada, usando só o refresh token (nunca a senha)."""
         self._refresh = refresh_token
@@ -77,18 +61,6 @@ class ClienteSupabase:
     def _avisar_renovacao(self):
         if self.ao_renovar and self._refresh:
             self.ao_renovar(self._refresh, self.usuario_email)
-
-    def nome_exibicao(self) -> str:
-        """Nome do usuário (do cadastro), lido do token. Sem nome, usa o e-mail."""
-        import base64
-        import json
-        try:
-            payload = self._token.split(".")[1]
-            payload += "=" * (-len(payload) % 4)
-            dados = json.loads(base64.urlsafe_b64decode(payload))
-            return (dados.get("user_metadata") or {}).get("nome") or self.usuario_email
-        except Exception:
-            return self.usuario_email or ""
 
     def usar_token(self, token: str):
         """Para testes e para o caso em que o token já é conhecido."""

@@ -1,15 +1,9 @@
 """Criptografia dos arquivos locais (chave em chave.key, criada no primeiro uso)."""
-import hashlib
 import json
 
 from cryptography.fernet import Fernet
 
 from controle_financeiro.config import CHAVE_PATH
-
-
-def _hash_senha(senha: str, salt_hex: str) -> str:
-    return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"),
-                               bytes.fromhex(salt_hex), 200_000).hex()
 
 
 class Cofre:

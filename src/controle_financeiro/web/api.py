@@ -141,11 +141,6 @@ def painel(fin: Fin, mes: str = ""):
 
 # ----- meses e resumo -----
 
-@app.get("/api/meses")
-def meses(fin: Fin):
-    return {"meses": fin.sessoes(), "mes_ativo": fin.mes_ativo()}
-
-
 @app.post("/api/meses/virar")
 def virar(fin: Fin):
     return fin.virar_mes()
@@ -154,11 +149,6 @@ def virar(fin: Fin):
 @app.delete("/api/meses/{mes}")
 def apagar_mes(fin: Fin, mes: str):
     return {"ok": fin.apagar_mes(mes)}
-
-
-@app.get("/api/resumo")
-def resumo(fin: Fin, mes: str = ""):
-    return fin.resumo_mes(mes or None)
 
 
 @app.get("/api/previsao")
@@ -174,16 +164,6 @@ def planejamento(fin: Fin, mes: str = "", quantos: int = 6):
             "parcelas_futuras": fin.parcelas_futuras(m, quantos), "assinaturas": fin.assinaturas(m)}
 
 
-@app.get("/api/parcelas-futuras")
-def parcelas_futuras(fin: Fin, mes: str = "", quantos: int = 6):
-    return fin.parcelas_futuras(mes or None, quantos)
-
-
-@app.get("/api/assinaturas")
-def assinaturas(fin: Fin, mes: str = ""):
-    return fin.assinaturas(mes or None)
-
-
 @app.get("/api/comparativo")
 def comparativo(fin: Fin, quantos: int = 6):
     return fin.comparar_meses(quantos)
@@ -193,11 +173,6 @@ def comparativo(fin: Fin, quantos: int = 6):
 def buscar(fin: Fin, texto: str = ""):
     linhas = fin.buscar(texto)
     return {"itens": linhas, "total": round(sum(l["valor"] or 0 for l in linhas), 2)}
-
-
-@app.get("/api/alertas-faturas")
-def alertas_faturas(fin: Fin, dias: int = 5):
-    return fin.alertas_faturas(date.today(), dias)
 
 
 # ----- cartões e compras -----
@@ -233,11 +208,6 @@ class EdicaoCompra(BaseModel):
     categoria_id: Optional[int] = None
 
 
-@app.get("/api/cartoes")
-def cartoes(fin: Fin):
-    return fin.listar_cartoes()
-
-
 @app.post("/api/cartoes")
 def adicionar_cartao(fin: Fin, dados: NovoCartao):
     return {"ok": fin.adicionar_cartao(dados.nome, dados.cor)}
@@ -251,11 +221,6 @@ def datas_cartao(fin: Fin, id_: int, dados: DatasCartao):
 @app.get("/api/compras")
 def compras(fin: Fin, mes: str = "", cartao: str = ""):
     return fin.listar_compras(cartao or None, mes or None)
-
-
-@app.get("/api/compras/{id_}")
-def compra(fin: Fin, id_: int):
-    return _existe(fin.obter_compra(id_), "Compra não encontrada.")
 
 
 @app.post("/api/compras")
@@ -303,11 +268,6 @@ class Recolocar(BaseModel):
 @app.get("/api/lancamentos/{tabela}")
 def lancamentos(fin: Fin, tabela: Tabela, mes: str = ""):
     return fin.listar_lancamentos(tabela, mes or None)
-
-
-@app.get("/api/lancamentos/{tabela}/{id_}")
-def lancamento(fin: Fin, tabela: Tabela, id_: int):
-    return _existe(fin.obter_lancamento(tabela, id_), "Lançamento não encontrado.")
 
 
 @app.post("/api/lancamentos/{tabela}")
@@ -358,9 +318,6 @@ class Categoria(BaseModel):
     orcamento: Valor = 0
 
 
-class Classificacao(BaseModel):
-    categoria_id: Optional[int] = None
-
 
 class Renda(BaseModel):
     valor: Valor
@@ -370,11 +327,6 @@ class Renda(BaseModel):
 def _gasto(fin, mes):
     """{categoria_id: valor} vira lista (o JSON não tem chave nula)."""
     return [{"categoria_id": k, "valor": v} for k, v in fin.gasto_por_categoria(mes).items()]
-
-
-@app.get("/api/categorias")
-def categorias(fin: Fin):
-    return fin.listar_categorias()
 
 
 @app.post("/api/categorias")
@@ -390,16 +342,6 @@ def atualizar_categoria(fin: Fin, id_: int, dados: Categoria):
 @app.delete("/api/categorias/{id_}")
 def apagar_categoria(fin: Fin, id_: int):
     return {"ok": fin.apagar_categoria(id_)}
-
-
-@app.patch("/api/classificar/{tabela}/{id_}")
-def classificar(fin: Fin, tabela: Literal["compras", "despesas"], id_: int, dados: Classificacao):
-    return {"ok": fin.classificar(tabela, id_, dados.categoria_id)}
-
-
-@app.get("/api/gasto-por-categoria")
-def gasto_por_categoria(fin: Fin, mes: str = ""):
-    return _gasto(fin, mes or None)
 
 
 @app.get("/api/renda")
@@ -424,11 +366,6 @@ class Pagamento(BaseModel):
 @app.get("/api/emprestimos")
 def emprestimos(fin: Fin, mes: str = ""):
     return fin.quanto_me_devem(mes or None)
-
-
-@app.get("/api/pessoas")
-def pessoas(fin: Fin):
-    return fin.pessoas()
 
 
 @app.get("/api/emprestimos/{pessoa}")
@@ -458,10 +395,6 @@ class EdicaoCaixinha(BaseModel):
     data_alvo: Optional[str] = None
 
 
-class Meta(BaseModel):
-    meta: Optional[Valor] = None
-    data_alvo: Optional[str] = None
-
 
 class Movimento(BaseModel):
     valor: Valor
@@ -474,11 +407,6 @@ def caixinhas(fin: Fin):
     return {"caixinhas": fin.andamento_caixinhas(), "tem_historico": fin.caixinhas_tem_historico()}
 
 
-@app.get("/api/caixinhas/{id_}")
-def caixinha(fin: Fin, id_: int):
-    return _existe(fin.obter_caixinha(id_), "Caixinha não encontrada.")
-
-
 @app.post("/api/caixinhas")
 def definir_caixinha(fin: Fin, dados: NovaCaixinha):
     return {"ok": fin.definir_caixinha(dados.dono, dados.nome, dados.valor)}
@@ -488,11 +416,6 @@ def definir_caixinha(fin: Fin, dados: NovaCaixinha):
 def atualizar_caixinha(fin: Fin, id_: int, dados: EdicaoCaixinha):
     return {"ok": fin.atualizar_caixinha(id_, dados.dono, dados.nome, dados.valor, dados.meta,
                                          dados.data_alvo)}
-
-
-@app.patch("/api/caixinhas/{id_}/meta")
-def meta_caixinha(fin: Fin, id_: int, dados: Meta):
-    return {"ok": fin.definir_meta_caixinha(id_, dados.meta, dados.data_alvo)}
 
 
 @app.post("/api/caixinhas/{id_}/guardar")

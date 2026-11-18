@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from controle_financeiro.dados.banco import BancoPostgres, TABELAS_SINCRONIA
+from controle_financeiro.dados.banco import BancoPostgres
 from controle_financeiro.dados.esquema import comandos
 from controle_financeiro.dados.nuvem import ClienteSupabase, ErroBanco
 from controle_financeiro.nucleo.servico import Financas
@@ -130,40 +130,3 @@ def test_leitura_comum_ainda_confere_o_supabase(banco, servidor):
     servidor.mudar_por_fora()
     banco._ultima_verificacao = 0.0
     assert [c["item"] for c in banco.consultar("SELECT item FROM compras")] == ["Por fora"]
-
-
-def test_buscar_mudancas_sem_mudanca_faz_uma_chamada_e_nao_devolve_nada(banco, servidor):
-    banco.consultar("SELECT 1")
-    servidor.chamadas = 0
-    assert banco.buscar_mudancas() is None
-    assert servidor.chamadas == 1  # só a versão
-
-
-def test_buscar_e_aplicar_mudancas_externas_em_duas_chamadas(banco, servidor):
-    banco.consultar("SELECT 1")
-    banco.verificar_nas_consultas = False
-    servidor.mudar_por_fora()
-    servidor.chamadas = 0
-    pacote = banco.buscar_mudancas()  # pode rodar fora da thread da interface
-    assert servidor.chamadas == 2  # versão + todas as tabelas em lote
-    assert banco.aplicar_mudancas(pacote) is True
-    assert [c["item"] for c in banco.consultar("SELECT item FROM compras")] == ["Por fora"]
-    assert banco.buscar_mudancas() is None  # agora está em dia
-
-
-def test_pacote_velho_e_descartado_se_a_cópia_mudou_no_meio(banco, servidor):
-    app = Financas(banco)
-    app.meses.sessoes()
-    banco.verificar_nas_consultas = False
-    servidor.mudar_por_fora()
-    pacote = banco.buscar_mudancas()
-    app.lancar_compra("Inter", "Minha", "10,00")  # gravei enquanto a busca estava no ar
-    assert banco.aplicar_mudancas(pacote) is False  # não pode desfazer a minha gravação
-    assert "Minha" in [c["item"] for c in app.listar_compras()]
-
-
-def test_buscar_mudancas_cobre_todas_as_tabelas(banco, servidor):
-    banco.consultar("SELECT 1")
-    servidor.mudar_por_fora()
-    pacote = banco.buscar_mudancas()
-    assert set(pacote["tabelas"]) == set(TABELAS_SINCRONIA)

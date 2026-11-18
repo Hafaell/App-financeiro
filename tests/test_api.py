@@ -22,7 +22,7 @@ def test_saude_nao_precisa_de_login():
 
 
 def test_sem_token_responde_401():
-    resp = TestClient(api.app).get("/api/meses")
+    resp = TestClient(api.app).get("/api/inicio")
     assert resp.status_code == 401
     assert "erro" in resp.json()
 
@@ -54,7 +54,7 @@ def test_erro_de_regra_vira_400_em_portugues(cliente):
 
 
 def test_item_inexistente_vira_404(cliente):
-    assert cliente.get("/api/compras/999").status_code == 404
+    assert cliente.delete("/api/compras/999").status_code == 404
 
 
 def test_receitas_e_despesas(cliente):
@@ -62,16 +62,15 @@ def test_receitas_e_despesas(cliente):
     did = cliente.post("/api/lancamentos/despesas",
                        json={"descricao": "Luz", "valor": 100, "recorrente": True}).json()["id"]
     cliente.patch(f"/api/lancamentos/despesas/{did}", json={"valor": 120})
-    resumo = cliente.get("/api/resumo").json()
+    resumo = cliente.get("/api/painel").json()["resumo"]
     assert resumo["receitas"] == 3000 and resumo["despesas_manuais"] == 120
     assert cliente.get("/api/lancamentos/outra").status_code == 400
 
 
-def test_categoria_gasto_e_classificar(cliente):
-    cat = cliente.get("/api/categorias").json()[0]["id"]
-    did = cliente.post("/api/lancamentos/despesas", json={"descricao": "Pão", "valor": 10}).json()["id"]
-    assert cliente.patch(f"/api/classificar/despesas/{did}", json={"categoria_id": cat}).json()["ok"]
-    assert {"categoria_id": cat, "valor": 10} in cliente.get("/api/gasto-por-categoria").json()
+def test_categoria_e_gasto_no_painel(cliente):
+    cat = cliente.get("/api/inicio").json()["categorias"][0]["id"]
+    cliente.post("/api/lancamentos/despesas", json={"descricao": "Pão", "valor": 10, "categoria_id": cat})
+    assert {"categoria_id": cat, "valor": 10} in cliente.get("/api/painel").json()["gasto"]
 
 
 def test_emprestimos_e_pagamento(cliente):
@@ -80,7 +79,7 @@ def test_emprestimos_e_pagamento(cliente):
     cliente.post("/api/pagamentos", json={"pessoa": "Pai", "valor": 50})
     assert cliente.get("/api/emprestimos").json() == [
         {"pessoa": "Pai", "emprestado": 200, "ja_pago": 50, "em_aberto": 150}]
-    assert cliente.get("/api/pessoas").json() == ["Pai"]
+    assert cliente.get("/api/inicio").json()["pessoas"] == ["Pai"]
 
 
 def test_caixinhas(cliente):
@@ -94,14 +93,14 @@ def test_caixinhas(cliente):
 
 def test_virar_salva_copia_no_banco_e_restaura(cliente):
     cliente.post("/api/compras", json={"cartao": "Inter", "item": "Antes", "valor_parcela": 10})
-    mes = cliente.get("/api/meses").json()["mes_ativo"]
+    mes = cliente.get("/api/inicio").json()["mes_ativo"]
     virada = cliente.post("/api/meses/virar").json()
     assert virada["origem"] == mes
     copias = cliente.get("/api/backups").json()
     assert copias[0]["motivo"].startswith("Antes da virada de")
     restaurado = cliente.post("/api/backups/restaurar", json={"id": copias[0]["id"]}).json()
     assert restaurado["copia_antes"]
-    assert cliente.get("/api/meses").json()["mes_ativo"] == mes  # voltou para antes da virada
+    assert cliente.get("/api/inicio").json()["mes_ativo"] == mes  # voltou para antes da virada
     assert len(cliente.get("/api/backups").json()) == 2
 
 
@@ -144,7 +143,7 @@ def test_renda_e_cartao(cliente):
     cliente.put("/api/renda", json={"valor": "5000"})
     assert cliente.get("/api/renda").json()["valor"] == 5000
     assert cliente.post("/api/cartoes", json={"nome": "C6", "cor": "#222222"}).json()["ok"]
-    cid = cliente.get("/api/cartoes").json()[-1]["id"]
+    cid = cliente.get("/api/inicio").json()["cartoes"][-1]["id"]
     assert cliente.patch(f"/api/cartoes/{cid}/datas", json={"dia_fechamento": 3}).json()["ok"]
 
 

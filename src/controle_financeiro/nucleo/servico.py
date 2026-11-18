@@ -57,8 +57,6 @@ class Financas:
     def adicionar_cartao(self, nome, cor):
         return self.cartoes.adicionar(nome, cor)
 
-    cor_texto_para = staticmethod(Cartoes.cor_texto)
-
     # ----- meses -----
     def sessoes(self):
         return self.meses.sessoes()
@@ -97,9 +95,6 @@ class Financas:
 
     def lancar_compra(self, *args, **kwargs):
         return self.compras.lancar(*args, **kwargs)
-
-    def atualizar_compra(self, *args, **kwargs):
-        return self.compras.atualizar(*args, **kwargs)
 
     def listar_backups(self):
         return self.copias.listar()
@@ -143,10 +138,6 @@ class Financas:
     def adicionar_lancamento(self, tabela, descricao, valor, mes=None, recorrente=False,
                              categoria_id=None):
         return self.lancamentos.adicionar(tabela, descricao, valor, mes, recorrente, categoria_id)
-
-    def atualizar_lancamento(self, tabela, id_, descricao, valor, recorrente=False,
-                             categoria_id=None):
-        return self.lancamentos.atualizar(tabela, id_, descricao, valor, recorrente, categoria_id)
 
     def editar_lancamento(self, tabela, id_, **campos):
         return self.lancamentos.editar(tabela, id_, **campos)

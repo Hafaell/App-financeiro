@@ -11,3 +11,6 @@ venv/
 
 # Configuração pessoal do Claude Code
 .claude/settings.local.json
+
+# Obsidian
+.obsidian/
