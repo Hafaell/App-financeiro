@@ -57,9 +57,13 @@ function Lista({ tabela, itens, abrir }: { tabela: Tabela; itens: Lancamento[]; 
   const lote = itens.map((l) => ({ id: l.id, valor: l.valor }))
   return (
     <Secao titulo={despesa ? 'Despesas' : 'Receitas'}
-      acoes={<button className="botao" onClick={() => abrir()}>{despesa ? 'Nova despesa' : 'Nova receita'}</button>}>
-      <BarraLote tabela={tabela} itens={despesa ? ['despesa', 'despesas'] : ['receita', 'receitas']}
-        selecao={selecao} visiveis={lote} />
+      acoes={(
+        <div className="acoes-secao">
+          <BarraLote tabela={tabela} itens={despesa ? ['despesa', 'despesas'] : ['receita', 'receitas']}
+            selecao={selecao} visiveis={lote} />
+          <button className="botao" onClick={() => abrir()}>{despesa ? 'Nova despesa' : 'Nova receita'}</button>
+        </div>
+      )}>
       {itens.length === 0 ? <Vazio>{despesa ? 'Nenhuma despesa neste mês.' : 'Nenhuma receita neste mês.'}</Vazio> : (
         <ul className="linhas">
           {itens.map((l) => (

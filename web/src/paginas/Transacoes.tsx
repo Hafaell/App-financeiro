@@ -28,7 +28,13 @@ export function Transacoes() {
 
   return (
     <Pagina titulo="Transações" descricao="Compras nos cartões neste mês. Toque numa compra para editar ou apagar."
-      acoes={<button className="botao primario" onClick={() => setNova(true)}>Nova compra</button>}>
+      acoes={(
+        <>
+          <BarraLote tabela="compras" itens={['compra', 'compras']} selecao={selecao}
+            visiveis={filtradas.map((c) => ({ id: c.id, valor: c.valor_parcela }))} />
+          <button className="botao primario" onClick={() => setNova(true)}>Nova compra</button>
+        </>
+      )}>
       <div className="filtros">
         <div className="chips" role="group" aria-label="Cartão">
           <button className={`chip${cartao === '' ? ' ativo' : ''}`} onClick={() => setCartao('')}>Todos</button>
@@ -41,9 +47,6 @@ export function Transacoes() {
         <input type="search" className="busca" placeholder="Buscar item ou pessoa" value={busca}
           onChange={(e) => setBusca(e.target.value)} aria-label="Buscar item ou pessoa" />
       </div>
-
-      <BarraLote tabela="compras" itens={['compra', 'compras']} selecao={selecao}
-        visiveis={filtradas.map((c) => ({ id: c.id, valor: c.valor_parcela }))} />
 
       {erro && !dados ? <ErroCarga mensagem={erro} tentarDeNovo={tentarDeNovo} /> : !dados ? <Carregando /> : (
         <>
