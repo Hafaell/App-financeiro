@@ -146,3 +146,38 @@ def test_renda_e_cartao(cliente):
     assert cliente.post("/api/cartoes", json={"nome": "C6", "cor": "#222222"}).json()["ok"]
     cid = cliente.get("/api/cartoes").json()[-1]["id"]
     assert cliente.patch(f"/api/cartoes/{cid}/datas", json={"dia_fechamento": 3}).json()["ok"]
+
+
+def _compra(cliente, item):
+    return cliente.post("/api/compras", json={"cartao": "inter", "item": item,
+                                              "valor_parcela": 10}).json()["id"]
+
+
+def test_apagar_varios_compras_e_desfazer(cliente):
+    a, b, c = (_compra(cliente, i) for i in ("A", "B", "C"))
+    resp = cliente.post("/api/apagar-varios", json={"tabela": "compras", "ids": [a, b]}).json()
+    assert resp["ok"] and sorted(l["id"] for l in resp["apagadas"]) == sorted([a, b])
+    assert [x["id"] for x in cliente.get("/api/compras").json()] == [c]
+    for linha in resp["apagadas"]:
+        cliente.post("/api/recolocar", json={"tabela": "compras", "linha": linha})
+    assert sorted(x["id"] for x in cliente.get("/api/compras").json()) == sorted([a, b, c])
+
+
+def test_apagar_varios_despesas_nao_mexe_em_receitas(cliente):
+    d1 = cliente.post("/api/lancamentos/despesas", json={"descricao": "Luz", "valor": 10}).json()["id"]
+    d2 = cliente.post("/api/lancamentos/despesas", json={"descricao": "Água", "valor": 20}).json()["id"]
+    cliente.post("/api/lancamentos/receitas", json={"descricao": "Salário", "valor": 100})
+    cliente.post("/api/apagar-varios", json={"tabela": "despesas", "ids": [d1, d2]})
+    assert cliente.get("/api/lancamentos/despesas").json() == []
+    assert len(cliente.get("/api/lancamentos/receitas").json()) == 1
+
+
+def test_apagar_varios_ids_vazios_ou_inexistentes(cliente):
+    for ids in ([], [9999]):
+        resp = cliente.post("/api/apagar-varios", json={"tabela": "compras", "ids": ids})
+        assert resp.status_code == 200 and resp.json()["apagadas"] == []
+
+
+def test_apagar_varios_tabela_invalida(cliente):
+    resp = cliente.post("/api/apagar-varios", json={"tabela": "outra", "ids": [1]})
+    assert resp.status_code in (400, 422)

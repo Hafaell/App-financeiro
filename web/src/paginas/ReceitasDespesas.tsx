@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { FormLancamento } from '../componentes/formularios'
+import { BarraLote, CaixaLinha, useSelecao } from '../componentes/selecao'
 import { Abas, Carregando, ErroCarga, FaixaNumeros, Metrica, Pagina, Secao, Valor, Vazio } from '../componentes/ui'
 import { get, q } from '../lib/api'
 import { useDados, useEstado } from '../lib/estado'
@@ -50,16 +51,21 @@ export function ReceitasDespesas() {
 }
 
 function Lista({ tabela, itens, abrir }: { tabela: Tabela; itens: Lancamento[]; abrir: (l?: Lancamento) => void }) {
-  const { nomeCategoria } = useEstado()
+  const { mes, nomeCategoria } = useEstado()
   const despesa = tabela === 'despesas'
+  const selecao = useSelecao(`${mes}|${tabela}`)
+  const lote = itens.map((l) => ({ id: l.id, valor: l.valor }))
   return (
     <Secao titulo={despesa ? 'Despesas' : 'Receitas'}
       acoes={<button className="botao" onClick={() => abrir()}>{despesa ? 'Nova despesa' : 'Nova receita'}</button>}>
+      <BarraLote tabela={tabela} itens={despesa ? ['despesa', 'despesas'] : ['receita', 'receitas']}
+        selecao={selecao} visiveis={lote} todas={lote} />
       {itens.length === 0 ? <Vazio>{despesa ? 'Nenhuma despesa neste mês.' : 'Nenhuma receita neste mês.'}</Vazio> : (
         <ul className="linhas">
           {itens.map((l) => (
-            <li key={l.id}>
-              <button className="linha" onClick={() => abrir(l)}>
+            <li key={l.id} className={selecao.ativo ? `com-caixa${selecao.ids.has(l.id) ? ' marcada' : ''}` : undefined}>
+              <CaixaLinha selecao={selecao} id={l.id} />
+              <button className="linha" onClick={() => (selecao.ativo ? selecao.alternar(l.id) : abrir(l))}>
                 <span className="linha-principal">
                   <span className="linha-titulo">{l.descricao}</span>
                   <span className="linha-meta">

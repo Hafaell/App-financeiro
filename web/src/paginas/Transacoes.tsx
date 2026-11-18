@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { FormCompra } from '../componentes/formularios'
+import { BarraLote, CaixaLinha, useSelecao } from '../componentes/selecao'
 import { Carregando, ErroCarga, FaixaNumeros, Metrica, Pagina, SeloCartao, Valor, Vazio } from '../componentes/ui'
 import { get, q } from '../lib/api'
 import { useDados, useEstado } from '../lib/estado'
@@ -14,12 +15,17 @@ export function Transacoes() {
   const [busca, setBusca] = useState('')
   const [editar, setEditar] = useState<Compra | null>(null)
   const [nova, setNova] = useState(false)
+  const selecao = useSelecao(`${mes}|${cartao}`)
 
   const filtradas = useMemo(() => {
     const t = busca.trim().toLowerCase()
     return (dados ?? []).filter((c) => (!cartao || c.cartao === cartao)
       && (!t || c.item.toLowerCase().includes(t) || c.pessoa.toLowerCase().includes(t)))
   }, [dados, cartao, busca])
+
+  // "Apagar tudo" ignora a busca, mas respeita o cartão escolhido
+  const doCartao = useMemo(() => (dados ?? []).filter((c) => !cartao || c.cartao === cartao), [dados, cartao])
+  const itensLote = (l: Compra[]) => l.map((c) => ({ id: c.id, valor: c.valor_parcela }))
 
   const meu = filtradas.filter((c) => !c.emprestimo).reduce((s, c) => s + c.valor_parcela, 0)
   const total = filtradas.reduce((s, c) => s + c.valor_parcela, 0)
@@ -40,6 +46,9 @@ export function Transacoes() {
           onChange={(e) => setBusca(e.target.value)} aria-label="Buscar item ou pessoa" />
       </div>
 
+      <BarraLote tabela="compras" itens={['compra', 'compras']} selecao={selecao}
+        visiveis={itensLote(filtradas)} todas={itensLote(doCartao)} />
+
       {erro && !dados ? <ErroCarga mensagem={erro} tentarDeNovo={tentarDeNovo} /> : !dados ? <Carregando /> : (
         <>
           <FaixaNumeros>
@@ -52,8 +61,9 @@ export function Transacoes() {
           ) : (
             <ul className="linhas">
               {filtradas.map((c) => (
-                <li key={c.id}>
-                  <button className="linha" onClick={() => setEditar(c)}>
+                <li key={c.id} className={selecao.ativo ? `com-caixa${selecao.ids.has(c.id) ? ' marcada' : ''}` : undefined}>
+                  <CaixaLinha selecao={selecao} id={c.id} />
+                  <button className="linha" onClick={() => (selecao.ativo ? selecao.alternar(c.id) : setEditar(c))}>
                     <span className="linha-principal">
                       <span className="linha-titulo">{c.item}</span>
                       <span className="linha-meta">

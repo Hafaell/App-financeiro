@@ -70,6 +70,7 @@ direto. Por isso há rotas que juntam o que uma tela precisa (`/api/inicio`, `/a
 | POST | `/api/lancamentos/{tabela}` | `adicionar_lancamento(...)` |
 | PATCH | `/api/lancamentos/{tabela}/{id}` | `editar_lancamento(tabela, id, **campos)` |
 | DELETE | `/api/lancamentos/{tabela}/{id}` | `apagar_lancamento(tabela, id)`; devolve `apagada` |
+| POST | `/api/apagar-varios` | `apagar_varios(tabela, ids)` (`tabela` = `compras`, `receitas` ou `despesas`); devolve `apagadas` |
 | POST | `/api/recolocar` | `recolocar(tabela, linha)` (desfazer exclusão, mesmo id) |
 
 ## Categorias e renda

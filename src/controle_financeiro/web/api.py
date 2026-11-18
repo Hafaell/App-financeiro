@@ -332,6 +332,17 @@ def apagar_lancamento(fin: Fin, tabela: Tabela, id_: int):
     return {"ok": True, "apagada": linha}
 
 
+class ApagarVarios(BaseModel):
+    tabela: Literal["compras", "receitas", "despesas"]
+    ids: list[int]
+
+
+@app.post("/api/apagar-varios")
+def apagar_varios(fin: Fin, dados: ApagarVarios):
+    """Apaga várias linhas de uma vez; devolve as linhas para o "Desfazer"."""
+    return {"ok": True, "apagadas": fin.apagar_varios(dados.tabela, dados.ids)}
+
+
 @app.post("/api/recolocar")
 def recolocar(fin: Fin, dados: Recolocar):
     """Desfaz a exclusão: grava a linha de novo, com o mesmo id."""

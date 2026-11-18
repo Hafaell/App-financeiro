@@ -154,6 +154,22 @@ class Financas:
     def apagar_lancamento(self, tabela, id_):
         return self.lancamentos.apagar(tabela, id_)
 
+    def apagar_varios(self, tabela, ids):
+        """Apaga várias compras, receitas ou despesas de uma vez (numa transação só).
+        Devolve as linhas que existiam, as mesmas que `recolocar` aceita para desfazer."""
+        if tabela not in ("compras", "receitas", "despesas"):
+            raise ValueError("Tabela inválida.")
+        ids = sorted({int(i) for i in ids})
+        if not ids:
+            return []
+        marcas = ",".join("?" * len(ids))
+        apagadas = self.banco.consultar(
+            f"SELECT * FROM {tabela} WHERE id IN ({marcas}) ORDER BY id", ids)
+        if apagadas:
+            with self.banco.transacao() as con:
+                con.execute(f"DELETE FROM {tabela} WHERE id IN ({marcas})", ids)
+        return apagadas
+
     # ----- empréstimos -----
     def quanto_me_devem(self, mes=None):
         return self.emprestimos.por_pessoa(mes)
