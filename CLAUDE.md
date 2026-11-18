@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Briefing do projeto
 
-**O que é:** app desktop Windows (PySide6) do Rafael para controlar cartões de crédito, empréstimos feitos com o cartão para outras pessoas, receitas, despesas e caixinhas. Substitui uma planilha antiga do Google Sheets. Os dados ficam no Supabase (PostgreSQL), isolados por conta.
+**O que é:** site (web) do Rafael para controlar cartões de crédito, empréstimos feitos com o cartão para outras pessoas, receitas, despesas e caixinhas. Substitui uma planilha antiga do Google Sheets. Os dados ficam no Supabase (PostgreSQL), isolados por conta.
 
 **Dois jeitos de usar os mesmos dados:**
-1. A interface gráfica (`ui/`).
+1. O site (`web/` + API em `src/controle_financeiro/web/`).
 2. O Claude, pelo servidor MCP `controle-financeiro` (`servidor_claude/`), usado pela skill **assistente-financeiro** ("Ayla"). Uma alteração feita por um lado aparece no outro em ~1 s.
 
 **Idioma:** código, interface, mensagens e comentários são em português do Brasil. Mantenha esse padrão (com acentos). Valores no formato brasileiro (R$ 1.250,50).
@@ -26,61 +26,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Comandos
 
 ```
-python -m pip install -e ".[desktop,claude,dev]"  # app desktop + Ayla + pytest e pyflakes
+python -m pip install -e ".[claude,dev]"      # API + Ayla + pytest e pyflakes
 python -m pytest                              # todos os testes
 python -m pytest tests/test_financas.py::test_nome   # um teste
 python -m pyflakes src tests                  # lint
-python -m controle_financeiro                 # abre o app (ou iniciar.pyw, sem terminal)
+python -m controle_financeiro.web.local       # API local com dados de exemplo (SQLite)
 python -m controle_financeiro.servidor_claude # servidor MCP (stdio)
-build_exe.bat                                 # PyInstaller: dist\ControleFinanceiro.zip
+python -m controle_financeiro.servidor_claude entrar  # login do MCP (e-mail e senha; guarda só o refresh token)
 ```
 
 Os testes (`tests/conftest.py`) forçam `FINANCAS_BANCO=sqlite` e redirecionam `LOCALAPPDATA` para uma pasta temporária, então nunca tocam no Supabase real. Fora dos testes, `fin()` (em `dados/contexto.py`) conecta ao **Supabase de verdade** com a sessão do usuário logado: qualquer script avulso que use `fin()` lê e grava dados reais. Avise o usuário antes de rodar um e prefira só leitura.
 
 ## Arquitetura
 
-Três camadas, sempre nesta direção: `ui/` e `servidor_claude/` → `nucleo/servico.py` (`Financas`) → `nucleo/*` → `dados/banco.py`.
+Três camadas, sempre nesta direção: `web/` (API do site) e `servidor_claude/` → `nucleo/servico.py` (`Financas`) → `nucleo/*` → `dados/banco.py`.
 
-- **`nucleo/servico.py` é a fachada única.** Tanto a interface quanto o servidor MCP chamam só `Financas`, que delega para um módulo por assunto (`compras`, `lancamentos`, `categorias`, `virada`...). Funcionalidade nova entra no módulo de `nucleo/`, ganha um método na fachada e só então vira tela ou ferramenta MCP.
-- **Dois bancos, mesma interface** (`dados/banco.py`): `BancoSqlite` (testes/local) e `BancoPostgres` (Supabase via HTTP, `dados/nuvem.py`). O SQL é escrito com `?` (estilo SQLite) e convertido para `%s` no Postgres. O banco Supabase mantém cópia em memória, fila offline e detecta mudanças externas por versão (`meta.versao`). Por padrão cada leitura confere a versão antes (servidor MCP, testes); a interface desliga isso (`verificar_nas_consultas = False`, em `Janela._configurar_banco`) e confere numa thread a cada 1,5 s (`buscar_mudancas` só usa a rede; `aplicar_mudancas` roda na thread da tela e descarta o pacote se a cópia mudou no meio). Baixar as tabelas é um `executar_lote` só, e `ClienteSupabase` reaproveita a conexão HTTPS (`requests.Session` com trava). `tests/test_desempenho.py` conta as chamadas de rede com um servidor falso.
+- **`nucleo/servico.py` é a fachada única.** Tanto a API do site quanto o servidor MCP chamam só `Financas`, que delega para um módulo por assunto (`compras`, `lancamentos`, `categorias`, `virada`...). Funcionalidade nova entra no módulo de `nucleo/`, ganha um método na fachada e só então vira tela ou ferramenta MCP.
+- **Dois bancos, mesma interface** (`dados/banco.py`): `BancoSqlite` (testes/local) e `BancoPostgres` (Supabase via HTTP, `dados/nuvem.py`). O SQL é escrito com `?` (estilo SQLite) e convertido para `%s` no Postgres. O banco Supabase mantém cópia em memória, fila offline e detecta mudanças externas por versão (`meta.versao`). Por padrão cada leitura confere a versão antes (servidor MCP, testes); o servidor MCP e os testes fazem assim. O site usa `BancoWeb` (sem cópia em disco). `tests/test_desempenho.py` conta as chamadas de rede com um servidor falso.
 - **Esquema em um só lugar** (`dados/esquema.py`), com marcadores `{ID}`, `{REAL}`, `{INT}` trocados por dialeto. Mudar uma tabela exige **duas coisas**: editar `esquema.py` (e o ajuste de bancos antigos em `_preparar`, no SQLite) **e** criar um novo script em `supabase/migracoes/NN_*.sql` para rodar à mão no SQL Editor do Supabase (veja `supabase/README.md`, que lista a ordem).
-- **Tabelas opcionais** (`TABELAS_OPCIONAIS` em `esquema.py`): dependem de um script novo no Supabase. Enquanto ele não roda, `BancoPostgres` marca a tabela como indisponível (`disponivel()`), o app abre normal e só a função dela fica desligada. Hoje: `movimentos_caixinha` (script `07_historico_caixinhas.sql`), o histórico das caixinhas (guardar, retirar, ajustes).
+- **Tabelas opcionais** (`TABELAS_OPCIONAIS` em `esquema.py`): dependem de um script novo no Supabase. Enquanto ele não roda, `BancoPostgres` marca a tabela como indisponível (`disponivel()`), o sistema abre normal e só a função dela fica desligada. Hoje: `movimentos_caixinha` (script `07_historico_caixinhas.sql`), o histórico das caixinhas (guardar, retirar, ajustes).
 - **Ids de linhas novas no Supabase:** dentro de `transacao()`, o `lastrowid` é da cópia local e pode não ser o do servidor. Para usar o id de uma linha recém-criada, grave com `gravar()` (que devolve o id real) e só então grave o que depende dele.
 - **Multiusuário no Supabase:** todos os usuários compartilham as mesmas tabelas; cada linha tem `user_id` e o RLS isola os dados.
 - **Dados locais** (chave, conexão, sessão) ficam criptografados em `%LOCALAPPDATA%\ControleFinanceiro` (`config.py`, `seguranca/cofre.py`), nunca no projeto.
 - **Cópia antes da virada:** `Financas.virar_mes()` salva todos os dados em `%LOCALAPPDATA%\ControleFinanceiro\backups\<usuário>\antes-da-virada_*.cfauto` (criptografado com a chave local, sem senha; guarda as 6 mais novas) e só então vira. Se a cópia falhar, o mês não vira. Em Ferramentas > Cópias automáticas o usuário restaura uma delas (`Financas.restaurar_backup`): troca todos os dados numa transação só, mantendo os ids, e antes salva outra cópia (`antes-de-restaurar_*`). Restaurar exige estar online no Supabase.
-- **Desfazer exclusão:** ao apagar compra, receita ou despesa pela tela, a janela oferece "Desfazer (Ctrl+Z)" por 30 s (`Janela.oferecer_desfazer`); `Financas.recolocar` grava a linha de novo com o mesmo id. Comandos que já trazem a coluna `id` são reenviados assim pela fila offline (`_sql_para_envio`).
-
-## Interface (`ui/`)
-
-- **Menu lateral em seções**, definido na lista `secoes` de `ui/janela.py`: **Geral** (Visão geral, Transações, Receitas e despesas, Planejamento, Comparativo), **Pessoal** (Empréstimos, Caixinhas) e **Sistema** (Importar extrato, Ferramentas). Critério: Geral é o dia a dia do mês; Pessoal é o que é só do usuário (quem deve a ele, o que ele guarda); Sistema é entrada em lote e manutenção. Página nova entra nessa lista e ganha `Ctrl+número` sozinha.
-- **Visão geral não tem listas:** só os números do mês, "Para onde foi o dinheiro" (todas as categorias, soma igual ao "Saiu"), o orçamento e os botões de lançar. Planejamento abre com a previsão do próximo mês (`Virada.prever`, mesmas regras da virada via `parcelas_seguintes`/`descricao_seguinte`). Receitas e despesas e Caixinhas têm páginas próprias (`paginas/lancamentos.py`, `paginas/caixinhas.py`).
-- **Diálogos** ficam no pacote `ui/dialogos/`: `acesso.py` (login, Supabase, Minha conta), `cadastros.py` (cartões, categorias, meses) e `compra.py` (formulário de compra). Importe pelo pacote: `from controle_financeiro.ui.dialogos import Login`.
-- **Tabelas:** use `nova_tabela(colunas, vazio)` de `ui/componentes.py` (classe `Tabela`). Ela ajusta as colunas ao conteúdo, mostra o texto `vazio` quando não há linhas e liga `Enter`/duplo clique e `Delete` por `ao_editar()` e `ao_apagar()`.
-- **Atalhos:** ligados em `ui/janela.py`; cada página responde ao `Ctrl+N` pelo método `novo()` (`paginas/base.py`). Ao mudar um atalho, atualize a lista `ATALHOS` em `paginas/ferramentas.py` e o README.
-- **Estilo:** cores (tokens `TINTA`, `PRIMARIA`, `MENTA`, `DESPESA`...) e folha de estilo só em `ui/tema.py` (evite `setStyleSheet` solto nas páginas). Lateral e painel de saldo em verde petróleo (`TINTA`), ação principal em `PRIMARIA`. Um `QWidget` puro dentro de um painel precisa de `setObjectName("transparente")`, senão pinta o fundo da janela.
-- **Fonte:** `assets/fontes/ManropeCF-*.ttf` (Manrope, OFL, modificada com algarismos tabulares e nome de família único "Manrope CF"; veja `LEIAME.txt` lá). `app.py` registra com `carregar_fontes`; sem a pasta, cai na Segoe UI. O `build_exe.bat` inclui a pasta no executável.
-- **Números:** use `Metrica` dentro de `FaixaNumeros` (painel único com divisórias), não cards coloridos separados. O tom (`normal`, `positivo`, `aviso`, `negativo`) muda a cor do valor. A Visão geral tem o painel de saldo escuro como único destaque.
-- **Alinhamento das tabelas:** `preencher` decide sozinho: valores em reais à direita, datas/parcelas/Sim-Não/balões no centro, nomes à esquerda.
-- **Conferir no visual:** `tests/test_interface.py` monta a janela com `QT_QPA_PLATFORM=offscreen` e SQLite; o mesmo caminho serve para salvar retratos das páginas com `janela.grab()` (chame `carregar_fontes` antes, senão o retrato sai com outra fonte).
-- **Skills do projeto** (`.claude/skills/`, versões em `skills-lock.json`): `find-skills` (busca skills com `npx skills find`) e `frontend-design` (diretrizes de design, usadas no layout).
+- **Desfazer exclusão:** `Financas.recolocar` grava a linha de novo com o mesmo id. Comandos que já trazem a coluna `id` são reenviados assim pela fila offline (`_sql_para_envio`).
 
 ## Versão web (branch `Vercel`)
 
-- **Três lados com os mesmos dados:** desktop, Ayla e o site. O site chama a API FastAPI
+- **Dois lados com os mesmos dados:** o site e a Ayla. O app desktop (PySide6) foi removido. O site chama a API FastAPI
   (`web/api.py`, uma rota por método de `Financas`, erros como `{"erro": ...}`); `api/index.py`
   só a importa para o Vercel. Rota nova: método na fachada primeiro, depois a rota, teste em
   `tests/test_api.py` (troca `api.financas` por um `Financas` com SQLite) e a linha em `docs/vercel/API.md`.
 - **`BancoWeb`** (`dados/banco_web.py`): o `BancoPostgres` sem disco e sem modo offline. Cada
   requisição cria um com o JWT do usuário; sem rede, a requisição falha (503) em vez de ir para fila.
 - **Cópias antes da virada:** `Financas(..., copias_no_banco=True)` usa a tabela `backups`
-  (`nucleo/copias.py`, script `08_backups_web.sql`); o desktop segue com arquivos. A tabela fica fora
+  (`nucleo/copias.py`, script `08_backups_web.sql`); o servidor MCP segue com arquivos. A tabela fica fora
   da cópia em memória: é lida e gravada com `consultar_direto` / `gravar_direto`.
 - **Dependências:** a base do `pyproject.toml` e o `requirements.txt` têm só o da web (o Vercel lê os
-  dois). PySide6 e `mcp` são os extras `desktop` e `claude`.
-- **Site (`web/`):** Vite + React + TypeScript, sem biblioteca de componentes. Cores e fonte iguais às de
-  `ui/tema.py` (tokens em `web/src/estilo.css`); celular primeiro (barra inferior com "Lançar"), lateral
-  com as seções do desktop no PC. Login e cadastro pelo supabase-js. `npm run build` checa os tipos.
+  dois). `mcp` é o extra `claude`.
+- **Site (`web/`):** Vite + React + TypeScript, sem biblioteca de componentes. Cores e fonte nos tokens de
+  `web/src/estilo.css`; celular primeiro (barra inferior com "Lançar"), lateral
+  com as seções (Geral, Pessoal, Sistema) no PC. Login e cadastro pelo supabase-js. `npm run build` checa os tipos.
 - **Ver no PC sem Supabase:** `python -m controle_financeiro.web.local` (SQLite com dados de exemplo) e
   `cd web && npm run dev:local`.
 

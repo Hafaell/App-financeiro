@@ -1,8 +1,8 @@
 """Servidor MCP do Controle Financeiro.
 
 O Claude Desktop inicia este arquivo sozinho (transporte stdio).
-Cada ferramenta lê ou grava no mesmo banco que o app desktop usa,
-então a tela do app atualiza em até 2 segundos depois de qualquer mudança.
+Cada ferramenta lê ou grava no mesmo banco que o site usa,
+então o site atualiza em até alguns segundos depois de qualquer mudança.
 
 Mês vazio em qualquer ferramenta = o mês em que você está (o mais recente aberto).
 """

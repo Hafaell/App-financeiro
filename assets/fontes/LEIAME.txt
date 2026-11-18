@@ -1,7 +1,0 @@
-Fonte da interface: Manrope (https://github.com/googlefonts/manrope)
-Copyright 2019 The Manrope Project Authors.
-Licença: SIL Open Font License 1.1 (arquivo OFL.txt nesta pasta).
-
-Versão modificada para o Controle Financeiro, com o nome "Manrope CF":
-- os algarismos usam a forma tabular (todos com a mesma largura), para alinhar valores em colunas;
-- todos os pesos usam o mesmo nome de família, para o Windows reconhecê-los como uma família só.

@@ -1,6 +1,6 @@
 """Vercel Function (Python): entrega a API da versão web.
 
-As rotas ficam em src/controle_financeiro/web/api.py (mesmo pacote do desktop, testado pelo
+As rotas ficam em src/controle_financeiro/web/api.py (mesmo pacote do servidor da Ayla, testado pelo
 pytest). O Vercel inclui a pasta src pela opção includeFiles do vercel.json.
 """
 import os

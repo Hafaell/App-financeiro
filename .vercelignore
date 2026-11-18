@@ -1,15 +1,9 @@
-# O que NÃO vai para o Vercel: só o desktop usa.
-src/controle_financeiro/ui/
-assets/
+# O que NÃO vai para o Vercel.
 tests/
 build/
 dist/
-*.bat
-*.iss
-*.pyw
 .claude/
 .github/
 docs/
 .obsidian/
 src/controle_financeiro/servidor_claude/
-requirements.desktop.txt

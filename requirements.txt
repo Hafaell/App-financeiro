@@ -1,5 +1,4 @@
-# Dependências da versão web (o Vercel instala este arquivo). Sem PySide6 nem mcp.
-# O app desktop e o servidor da Ayla usam requirements.desktop.txt.
+# Dependências da versão web (o Vercel instala este arquivo). Sem mcp: ele é o extra "claude".
 cryptography>=42
 requests>=2.31
 fastapi>=0.110

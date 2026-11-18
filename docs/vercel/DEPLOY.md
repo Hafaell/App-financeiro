@@ -8,8 +8,8 @@ No SQL Editor do Supabase, rode `supabase/migracoes/08_backups_web.sql` (uma vez
 tabela das cópias de segurança que o site salva antes de virar o mês. Sem ele o site funciona,
 mas não deixa virar o mês (a cópia falharia e, por segurança, o mês não vira).
 
-Confira também se os scripts `01`, `03`, `05`, `06` e `07` já rodaram (o app desktop funcionando
-com histórico de caixinhas indica que sim). O `05` é o que libera o cadastro de contas novas.
+Confira também se os scripts `01`, `03`, `05`, `06` e `07` já rodaram (o histórico de caixinhas funcionando
+no site indica que sim). O `05` é o que libera o cadastro de contas novas.
 
 ## 2. Conta e projeto no Vercel
 
@@ -56,8 +56,8 @@ direto.
 
 1. Abra `https://<seu-site>/api/saude`: deve responder `{"ok":true,"fuso":"-03 -0300"}` (a API está no ar,
    no fuso de São Paulo).
-2. Abra o site e entre com o e-mail e a senha do app desktop.
-3. Lance algo no site e veja aparecer no desktop (e vice-versa).
+2. Abra o site e entre com o e-mail e a senha da sua conta.
+3. Lance algo no site e veja aparecer na Ayla (e vice-versa).
 
 Se a tela disser "Falta configurar o site", faltam as variáveis `VITE_` (passo 3) ou o redeploy.
 Se o login funcionar mas os dados não abrirem, confira `SUPABASE_URL` e `SUPABASE_CHAVE` e veja
@@ -90,10 +90,9 @@ vercel dev                                         # site e API juntos em http:/
 
 ## 8. O que continua no seu PC
 
-O app desktop (`ControleFinanceiro.exe`) e a Ayla (servidor MCP) continuam iguais e usam os
-mesmos dados. Lançar algo no site aparece no desktop em ~1 s; o site confere mudanças de fora a
+O app desktop foi removido. A Ayla (servidor MCP) continua igual e usa os
+mesmos dados. Lançar algo no site aparece para ela em ~1 s; o site confere mudanças de fora a
 cada 15 s (e ao voltar para a aba).
 
-As cópias antes da virada ficam em lugares diferentes: o desktop salva em arquivo no PC
-(Ferramentas > Cópias automáticas do app) e o site salva na tabela `backups` do Supabase
+As cópias antes da virada ficam em lugares diferentes: a Ayla salva em arquivo no PC e o site salva na tabela `backups` do Supabase
 (Ferramentas > Cópias automáticas do site).

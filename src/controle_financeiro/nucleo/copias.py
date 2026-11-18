@@ -1,6 +1,6 @@
 """Onde ficam as cópias automáticas (antes da virada e antes de restaurar).
 
-- CopiasEmPasta: desktop. Arquivos .cfauto criptografados em %LOCALAPPDATA% (ref = caminho).
+- CopiasEmPasta: servidor da Ayla (MCP). Arquivos .cfauto criptografados em %LOCALAPPDATA% (ref = caminho).
 - CopiasNoBanco: versão web. Tabela `backups` no Supabase, isolada por usuário (ref = id).
   Depende do script supabase/migracoes/08_backups_web.sql.
 

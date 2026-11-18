@@ -1,4 +1,0 @@
-# App desktop (PySide6) e servidor MCP da Ayla. Usado pelo build_exe.bat.
--r requirements.txt
-PySide6>=6.6
-mcp>=1.2,<2

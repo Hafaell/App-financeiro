@@ -5,12 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "controle-financeiro"
 version = "2.0.0"
-description = "Controle de gastos dos cartões, empréstimos e caixinhas, com servidor para o Claude."
+description = "Controle de gastos dos cartões, empréstimos e caixinhas (site e servidor para o Claude)."
 readme = "README.md"
 requires-python = ">=3.12"
-# Base: só o que a versão web (Vercel) precisa. O desktop instala com os extras:
-#   python -m pip install -e ".[desktop,claude,dev]"
-# (PySide6 passa do limite de tamanho das funções do Vercel, por isso fica num extra.)
+# Base: só o que a versão web (Vercel) precisa. Para desenvolver e rodar a Ayla (servidor MCP):
+#   python -m pip install -e ".[claude,dev]"
 dependencies = [
     "cryptography>=42",
     "requests>=2.31",
@@ -18,12 +17,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-desktop = ["PySide6>=6.6"]
 claude = ["mcp>=1.2,<2"]
 dev = ["pytest>=8", "pyflakes>=3", "httpx>=0.27", "uvicorn>=0.30"]
-
-[project.gui-scripts]
-controle-financeiro = "controle_financeiro.ui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

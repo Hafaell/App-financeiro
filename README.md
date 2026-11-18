@@ -1,88 +1,66 @@
 # Controle Financeiro
 
-Aplicativo desktop (Windows) para controlar os gastos dos cartões, os empréstimos para outras
+Site (celular e PC) para controlar os gastos dos cartões, os empréstimos para outras
 pessoas, as receitas, as despesas e as caixinhas. Os dados ficam no Supabase, e cada conta vê
 apenas os próprios dados.
 
-O app também tem um servidor (`servidor_claude`) que permite ao Claude consultar e alterar
+O projeto também tem um servidor (`servidor_claude`) que permite ao Claude consultar e alterar
 os mesmos dados.
 
 ## Como usar
 
-1. Na primeira abertura, cole o token de acesso pessoal do Supabase e escolha o projeto.
-2. Entre com o e-mail e a senha da conta.
-3. Em **Minha conta** (barra lateral), troque o token ou o projeto quando precisar.
+- **Site:** entre com o e-mail e a senha da conta (veja `docs/vercel/DEPLOY.md`).
+- **Ayla (Claude):** rode uma vez `python -m controle_financeiro.servidor_claude entrar` para
+  guardar a sessão (só o refresh token, criptografado; a senha não é salva). Depois o Claude
+  Desktop inicia o servidor com `python -m controle_financeiro.servidor_claude`.
 
 Para configurar o banco, veja `supabase/README.md`.
-
-## Menu e atalhos
-
-O menu lateral tem três seções:
-
-- **Geral:** Visão geral, Transações, Receitas e despesas, Planejamento e Comparativo.
-- **Pessoal:** Empréstimos (quem te deve) e Caixinhas.
-- **Sistema:** Importar extrato e Ferramentas.
-
-Atalhos do teclado: `Ctrl+1` a `Ctrl+9` abrem cada item do menu, `Ctrl+N` cria um lançamento na
-página aberta, `Ctrl+F` busca, `Enter` edita e `Delete` apaga a linha selecionada, `Ctrl+Z` desfaz a última exclusão, `Alt+←` e
-`Alt+→` trocam o mês e `F5` atualiza os dados. A lista também aparece em Ferramentas.
 
 ## Estrutura
 
 ```
 controle-financeiro/
-  iniciar.pyw              abre o app sem janela de terminal
-  build_exe.bat            gera o app em pasta + dist\ControleFinanceiro.zip
   pyproject.toml
   requirements.txt
   src/controle_financeiro/
-    __main__.py            ponto de entrada (python -m controle_financeiro)
     config.py              caminhos e constantes
     dados/                 acesso aos dados
       banco.py             banco local (SQLite) e Supabase, com cópia em memória e fila offline
       nuvem.py             cliente HTTP do Supabase (login e comandos SQL)
-      conexao.py           token, projeto e chave pública, guardados criptografados
-      contexto.py          quem está logado nesta janela
+      conexao.py           URL e chave pública do Supabase, guardadas criptografadas
+      contexto.py          quem está conectado (usado pelo servidor do Claude)
       esquema.py           definição das tabelas
     nucleo/                regras de negócio, sem tela
-      servico.py           fachada usada pela interface e pelo servidor do Claude
+      servico.py           fachada usada pela API do site e pelo servidor do Claude
       compras.py, lancamentos.py, emprestimos.py, caixinhas.py, categorias.py,
       cartoes.py, meses.py, virada.py, planejamento.py, resumo.py,
       ferramentas.py, importacao.py, utilidades.py
     seguranca/             criptografia e login
       cofre.py             criptografia dos arquivos locais
       autenticacao.py      entrar, sair e sessão
-    ui/                    interface gráfica (PySide6)
-      app.py               inicialização e tela de entrada
-      janela.py            janela principal: menu em seções, mês, conta e atalhos
-      componentes.py       menu lateral, tabelas, cards e formulários
-      tema.py              cores, fonte e folha de estilo
-      dialogos/            acesso.py (entrada, conexão, Minha conta), cadastros.py e compra.py
-      paginas/             uma página por aba
-    servidor_claude/       servidor MCP para o Claude
+    web/                   API (FastAPI) do site, servida pelo Vercel
+    servidor_claude/       servidor MCP para o Claude (Ayla)
+  web/                     site (React + TypeScript)
+  api/                     entrada da API no Vercel
   tests/                   testes automatizados (pytest)
   supabase/migracoes/      scripts SQL, na ordem de execução
-  assets/fontes/           fonte da interface (Manrope, licença OFL)
 ```
 
 ## Desenvolvimento
 
 ```
-python -m pip install -e ".[desktop,claude,dev]"
+python -m pip install -e ".[claude,dev]"
 python -m pytest
-python -m controle_financeiro
 ```
 
 Os testes usam um banco SQLite temporário, então não tocam nos dados reais.
-
-Para gerar o executável no Windows, rode `build_exe.bat`.
 
 ## Versão web (Vercel)
 
 A branch `Vercel` tem também um site com as mesmas telas e os mesmos dados (celular e PC),
 publicado no Vercel. As regras são as mesmas (`nucleo/`), servidas por uma API em Python
 (`src/controle_financeiro/web/api.py`, chamada pelo `api/index.py`) e mostradas pelo site em
-`web/` (React + TypeScript). Lançar algo no site aparece no app desktop e na Ayla, e vice-versa.
+`web/` (React + TypeScript). Lançar algo no site aparece na Ayla, e vice-versa.
 
 - Como publicar: `docs/vercel/DEPLOY.md`.
 - Rotas da API: `docs/vercel/API.md`. Plano e decisões: `docs/vercel/PLANO.md`.

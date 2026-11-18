@@ -8,7 +8,7 @@
     "api/index.py": {
       "maxDuration": 30,
       "includeFiles": "src/controle_financeiro/**",
-      "excludeFiles": "{src/controle_financeiro/ui/**,src/controle_financeiro/servidor_claude/**,tests/**,web/**,assets/**,build/**,dist/**,docs/**,**/__pycache__/**}"
+      "excludeFiles": "{src/controle_financeiro/servidor_claude/**,tests/**,web/**,docs/**,**/__pycache__/**}"
     }
   },
   "rewrites": [
