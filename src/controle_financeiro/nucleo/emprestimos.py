@@ -44,6 +44,39 @@ class Emprestimos:
             "SELECT * FROM compras WHERE emprestimo = 1 AND pessoa = ? AND mes = ? ORDER BY id",
             (pessoa, self.meses.interpretar(mes)))
 
+    def listar_pagamentos(self, pessoa, mes=None):
+        """Pagamentos recebidos de uma pessoa. Com mes=None, traz todos os meses."""
+        if mes is None:
+            return self.banco.consultar(
+                "SELECT * FROM pagamentos WHERE pessoa = ? ORDER BY mes, id", (pessoa,))
+        return self.banco.consultar(
+            "SELECT * FROM pagamentos WHERE pessoa = ? AND mes = ? ORDER BY id",
+            (pessoa, self.meses.interpretar(mes)))
+
+    def obter_pagamento(self, id_):
+        linhas = self.banco.consultar("SELECT * FROM pagamentos WHERE id = ?", (int(id_),))
+        return linhas[0] if linhas else None
+
+    def editar_pagamento(self, id_, **campos) -> dict:
+        """Muda só os campos informados (pessoa, valor, descricao) de um pagamento.
+        Mantém o id, o mês e a data em que foi registrado. Devolve o pagamento como ficou."""
+        desconhecidos = set(campos) - {"pessoa", "valor", "descricao"}
+        if desconhecidos:
+            raise ValueError(f"Campo que não pode ser editado em pagamento: {', '.join(sorted(desconhecidos))}.")
+        atual = self.obter_pagamento(id_)
+        if not atual:
+            raise ValueError("Pagamento não encontrado.")
+        if atual["mes"]:
+            self.meses.exigir(atual["mes"])
+        novos = {k: atual[k] for k in ("pessoa", "valor", "descricao")}
+        novos.update(campos)
+        pessoa = str(novos["pessoa"] or "").strip()
+        if not pessoa:
+            raise ValueError("Informe a pessoa.")
+        self.banco.gravar("UPDATE pagamentos SET pessoa = ?, valor = ?, descricao = ? WHERE id = ?",
+                          (pessoa, dinheiro(novos["valor"]), novos["descricao"] or "", int(id_)))
+        return self.obter_pagamento(id_)
+
     def pagar(self, pessoa, valor, descricao="", mes=None) -> int:
         p = str(pessoa or "").strip()
         if not p:

@@ -174,6 +174,12 @@ class Financas:
     def registrar_pagamento(self, pessoa, valor, descricao="", mes=None):
         return self.emprestimos.pagar(pessoa, valor, descricao, mes)
 
+    def pagamentos_de(self, pessoa, mes=None):
+        return self.emprestimos.listar_pagamentos(pessoa, mes)
+
+    def editar_pagamento(self, id_, **campos):
+        return self.emprestimos.editar_pagamento(id_, **campos)
+
     # ----- caixinhas -----
     def listar_caixinhas(self):
         return self.caixinhas.listar()

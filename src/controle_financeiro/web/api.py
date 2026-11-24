@@ -379,6 +379,23 @@ def registrar_pagamento(fin: Fin, dados: Pagamento):
     return {"id": fin.registrar_pagamento(dados.pessoa, dados.valor, dados.descricao, dados.mes or None)}
 
 
+class EdicaoPagamento(BaseModel):
+    pessoa: str
+    valor: Valor
+    descricao: str = ""
+
+
+@app.get("/api/pagamentos/{pessoa}")
+def pagamentos_de(fin: Fin, pessoa: str, mes: str = ""):
+    """Com mes vazio, traz todos os meses."""
+    return fin.pagamentos_de(pessoa, mes or None)
+
+
+@app.put("/api/pagamentos/{id_}")
+def editar_pagamento(fin: Fin, id_: int, dados: EdicaoPagamento):
+    return fin.editar_pagamento(id_, pessoa=dados.pessoa, valor=dados.valor, descricao=dados.descricao)
+
+
 # ----- caixinhas -----
 
 class NovaCaixinha(BaseModel):

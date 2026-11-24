@@ -251,6 +251,28 @@ def registrar_pagamento(pessoa: str, valor: str, descricao: str = "", mes: str =
             "id": fin().registrar_pagamento(pessoa, valor, descricao, mes=mes or None)}
 
 
+@mcp.tool()
+def listar_pagamentos(pessoa: str, mes: str = "") -> list[dict]:
+    """Lista os pagamentos que uma pessoa já fez (com o id de cada um), no mês.
+    Vazio = mês atual. Use 'todos' para ver todos os meses."""
+    if mes.strip().lower() == "todos":
+        return fin().pagamentos_de(pessoa, None)
+    return fin().pagamentos_de(pessoa, mes or None)
+
+
+@mcp.tool()
+def editar_pagamento(id: int, pessoa: str = "", valor: str = "", descricao: str = "") -> dict:
+    """Corrige um pagamento já registrado (valor errado, pessoa errada), sem apagar nem recriar:
+    o id, o mês e a data continuam os mesmos. Passe só o que muda; campo vazio fica como está.
+    id: veja em listar_pagamentos. valor: ex. 'R$ 50,00'.
+    Confirme com o usuário qual pagamento é antes de editar."""
+    campos = {k: v for k, v in (("pessoa", pessoa), ("valor", valor), ("descricao", descricao))
+              if str(v).strip()}
+    if not campos:
+        return {"ok": False, "erro": "Informe o que mudar."}
+    return {"ok": True, "pagamento": fin().editar_pagamento(id, **campos)}
+
+
 # ----- caixinhas -----
 
 @mcp.tool()

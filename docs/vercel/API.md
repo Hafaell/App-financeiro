@@ -82,6 +82,8 @@ direto. Por isso há rotas que juntam o que uma tela precisa (`/api/inicio`, `/a
 | GET | `/api/emprestimos?mes=` | `quanto_me_devem(mes)` |
 | GET | `/api/emprestimos/{pessoa}?mes=` | `emprestimos_de(pessoa, mes)` (mes vazio = todos os meses) |
 | POST | `/api/pagamentos` | `registrar_pagamento(pessoa, valor, descricao, mes)` |
+| GET | `/api/pagamentos/{pessoa}?mes=` | `pagamentos_de(pessoa, mes)` (mes vazio = todos os meses) |
+| PUT | `/api/pagamentos/{id}` | `editar_pagamento(id, pessoa, valor, descricao)` (mantém id, mês e data) |
 
 ## Caixinhas
 

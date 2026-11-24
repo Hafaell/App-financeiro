@@ -3,10 +3,10 @@ import { FormCompra } from '../componentes/formularios'
 import {
   Abas, Campo, Carregando, ErroCarga, FaixaNumeros, Formulario, Metrica, Modal, Pagina, Secao, SeloCartao, Valor, Vazio,
 } from '../componentes/ui'
-import { get, post, q } from '../lib/api'
+import { get, post, put, q } from '../lib/api'
 import { useDados, useEstado } from '../lib/estado'
 import { brl, nomeMes } from '../lib/formato'
-import type { Compra, Divida } from '../lib/tipos'
+import type { Compra, Divida, Pagamento } from '../lib/tipos'
 
 /** Quem te deve no mês, os empréstimos de cada pessoa e os pagamentos recebidos. */
 export function Emprestimos() {
@@ -74,8 +74,13 @@ function ConteudoDetalhe({ pessoa, pagar }: { pessoa: string; pagar: (p: string)
   const { mes, inicio } = useEstado()
   const [todos, setTodos] = useState<'mes' | 'todos'>('mes')
   const [editar, setEditar] = useState<Compra | null>(null)
+  const [editarPagamento, setEditarPagamento] = useState<Pagamento | null>(null)
   const { dados, erro, tentarDeNovo } = useDados(
     () => get<Compra[]>(`/api/emprestimos/${encodeURIComponent(pessoa)}${q({ mes: todos === 'mes' ? mes : '' })}`),
+    [pessoa, todos],
+  )
+  const pagamentos = useDados(
+    () => get<Pagamento[]>(`/api/pagamentos/${encodeURIComponent(pessoa)}${q({ mes: todos === 'mes' ? mes : '' })}`),
     [pessoa, todos],
   )
   return (
@@ -105,12 +110,71 @@ function ConteudoDetalhe({ pessoa, pagar }: { pessoa: string; pagar: (p: string)
             <p className="totais"><span>Total <strong className="num">{brl(dados.reduce((s, c) => s + c.valor_parcela, 0))}</strong></span></p>
           </>
         )}
+      {pagamentos.dados && pagamentos.dados.length > 0 && (
+        <>
+          <h3>Pagamentos recebidos</h3>
+          <ul className="linhas">
+            {pagamentos.dados.map((p) => (
+              <li key={p.id}>
+                <button className="linha" onClick={() => setEditarPagamento(p)}>
+                  <span className="linha-principal">
+                    <span className="linha-titulo">{p.descricao || 'Pagamento'}</span>
+                    <span className="linha-meta">
+                      <span>{new Date(`${p.data}T12:00:00`).toLocaleDateString('pt-BR')}</span>
+                      {todos === 'todos' && p.mes && <span>{nomeMes(p.mes)}</span>}
+                    </span>
+                  </span>
+                  <Valor v={p.valor} tom="positivo" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <div className="form-acoes">
         <button className="botao primario" onClick={() => pagar(pessoa)}>Registrar pagamento de {pessoa}</button>
       </div>
       <FormCompra key={editar?.id ?? 'nenhuma'} aberto={editar !== null} fechar={() => setEditar(null)}
         compra={editar ?? undefined} />
+      <Modal titulo="Editar pagamento" aberto={editarPagamento !== null} fechar={() => setEditarPagamento(null)}>
+        {editarPagamento && (
+          <FormEditarPagamento pagamento={editarPagamento} fechar={() => setEditarPagamento(null)}
+            recarregar={pagamentos.tentarDeNovo} />
+        )}
+      </Modal>
     </>
+  )
+}
+
+function FormEditarPagamento({ pagamento, fechar, recarregar }: {
+  pagamento: Pagamento; fechar: () => void; recarregar: () => void
+}) {
+  const { inicio, atualizar, avisar } = useEstado()
+  const [pessoa, setPessoa] = useState(pagamento.pessoa)
+  const [valor, setValor] = useState(String(pagamento.valor).replace('.', ','))
+  const [descricao, setDescricao] = useState(pagamento.descricao)
+  return (
+    <Formulario rotulo="Salvar" enviar={async () => {
+      await put(`/api/pagamentos/${pagamento.id}`, { pessoa, valor, descricao })
+      await atualizar()
+      recarregar()
+      fechar()
+      avisar('Pagamento corrigido.')
+    }}>
+      <Campo rotulo="Pessoa">{(id) => (
+        <>
+          <input id={id} value={pessoa} onChange={(e) => setPessoa(e.target.value)} list={`${id}-l`} required />
+          <datalist id={`${id}-l`}>{inicio.pessoas.map((p) => <option key={p} value={p} />)}</datalist>
+        </>
+      )}</Campo>
+      <Campo rotulo="Valor devolvido">{(id) => (
+        <input id={id} value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" required
+          autoFocus />
+      )}</Campo>
+      <Campo rotulo="Observação">{(id) => (
+        <input id={id} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Opcional" />
+      )}</Campo>
+    </Formulario>
   )
 }
 

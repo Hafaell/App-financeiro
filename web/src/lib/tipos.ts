@@ -80,6 +80,15 @@ export interface Divida {
   em_aberto: number
 }
 
+export interface Pagamento {
+  id: number
+  pessoa: string
+  valor: number
+  data: string
+  descricao: string
+  mes: string | null
+}
+
 export interface Caixinha {
   id: number
   dono: string

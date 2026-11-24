@@ -32,6 +32,14 @@ def test_editar_compra_pela_ayla_avisa_categoria_errada_e_nada_para_mudar(app):
     assert app.obter_compra(id_)["valor_parcela"] == 20.0
 
 
+def test_editar_pagamento_pela_ayla(app):
+    id_ = app.registrar_pagamento("Pai", "R$ 500,00", "pix")
+    assert [p["id"] for p in servidor.listar_pagamentos("Pai")] == [id_]
+    r = servidor.editar_pagamento(id_, valor="R$ 50,00")
+    assert r["ok"] and r["pagamento"]["valor"] == 50 and r["pagamento"]["descricao"] == "pix"
+    assert servidor.editar_pagamento(id_)["ok"] is False
+
+
 def test_virar_mes_pela_ayla_devolve_a_copia(app, tmp_path):
     r = servidor.virar_mes()
     assert r["backup"].startswith(str(tmp_path))

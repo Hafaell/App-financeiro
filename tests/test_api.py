@@ -82,6 +82,22 @@ def test_emprestimos_e_pagamento(cliente):
     assert cliente.get("/api/inicio").json()["pessoas"] == ["Pai"]
 
 
+def test_editar_pagamento(cliente):
+    cliente.post("/api/compras", json={"cartao": "Nubank", "item": "Tênis", "valor_parcela": 200,
+                                       "pessoa": "Pai"})
+    pid = cliente.post("/api/pagamentos", json={"pessoa": "Pai", "valor": 500}).json()["id"]
+    antes = cliente.get("/api/pagamentos/Pai").json()
+    assert [(p["id"], p["valor"]) for p in antes] == [(pid, 500)]
+    resp = cliente.put(f"/api/pagamentos/{pid}", json={"pessoa": "Pai", "valor": "50,00", "descricao": "pix"})
+    assert resp.status_code == 200 and resp.json()["valor"] == 50
+    depois = cliente.get("/api/pagamentos/Pai").json()
+    assert [(p["id"], p["valor"], p["descricao"], p["data"], p["mes"]) for p in depois] == [
+        (pid, 50, "pix", antes[0]["data"], antes[0]["mes"])]
+    assert cliente.get("/api/emprestimos").json()[0]["em_aberto"] == 150
+    assert cliente.put(f"/api/pagamentos/{pid}", json={"pessoa": " ", "valor": 1}).status_code == 400
+    assert cliente.put("/api/pagamentos/99999", json={"pessoa": "Pai", "valor": 1}).status_code == 400
+
+
 def test_caixinhas(cliente):
     cliente.post("/api/caixinhas", json={"dono": "Eu", "nome": "Viagem", "valor": 100})
     cid = cliente.get("/api/caixinhas").json()["caixinhas"][0]["id"]
