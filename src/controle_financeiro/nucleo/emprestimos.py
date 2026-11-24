@@ -77,6 +77,16 @@ class Emprestimos:
                           (pessoa, dinheiro(novos["valor"]), novos["descricao"] or "", int(id_)))
         return self.obter_pagamento(id_)
 
+    def apagar_pagamento(self, id_) -> bool:
+        """Apaga um pagamento registrado (o valor volta a ficar em aberto para a pessoa)."""
+        atual = self.obter_pagamento(id_)
+        if not atual:
+            raise ValueError("Pagamento não encontrado.")
+        if atual["mes"]:
+            self.meses.exigir(atual["mes"])
+        _, n = self.banco.gravar("DELETE FROM pagamentos WHERE id = ?", (int(id_),))
+        return n > 0
+
     def pagar(self, pessoa, valor, descricao="", mes=None) -> int:
         p = str(pessoa or "").strip()
         if not p:

@@ -180,6 +180,9 @@ class Financas:
     def editar_pagamento(self, id_, **campos):
         return self.emprestimos.editar_pagamento(id_, **campos)
 
+    def apagar_pagamento(self, id_):
+        return self.emprestimos.apagar_pagamento(id_)
+
     # ----- caixinhas -----
     def listar_caixinhas(self):
         return self.caixinhas.listar()

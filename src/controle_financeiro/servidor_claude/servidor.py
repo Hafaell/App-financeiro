@@ -273,6 +273,14 @@ def editar_pagamento(id: int, pessoa: str = "", valor: str = "", descricao: str 
     return {"ok": True, "pagamento": fin().editar_pagamento(id, **campos)}
 
 
+@mcp.tool()
+def apagar_pagamento(id: int) -> dict:
+    """Apaga um pagamento registrado por engano (o valor volta a ficar em aberto para a pessoa).
+    id: veja em listar_pagamentos. Se só o valor ou a pessoa está errado, use editar_pagamento.
+    Confirme com o usuário qual pagamento é antes de apagar."""
+    return {"ok": fin().apagar_pagamento(id)}
+
+
 # ----- caixinhas -----
 
 @mcp.tool()

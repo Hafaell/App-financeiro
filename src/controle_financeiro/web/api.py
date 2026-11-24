@@ -396,6 +396,11 @@ def editar_pagamento(fin: Fin, id_: int, dados: EdicaoPagamento):
     return fin.editar_pagamento(id_, pessoa=dados.pessoa, valor=dados.valor, descricao=dados.descricao)
 
 
+@app.delete("/api/pagamentos/{id_}")
+def apagar_pagamento(fin: Fin, id_: int):
+    return {"ok": fin.apagar_pagamento(id_)}
+
+
 # ----- caixinhas -----
 
 class NovaCaixinha(BaseModel):

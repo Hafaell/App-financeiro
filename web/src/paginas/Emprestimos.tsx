@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { FormCompra } from '../componentes/formularios'
 import {
   Abas, Campo, Carregando, ErroCarga, FaixaNumeros, Formulario, Metrica, Modal, Pagina, Secao, SeloCartao, Valor, Vazio,
+  useConfirmar,
 } from '../componentes/ui'
-import { get, post, put, q } from '../lib/api'
+import { del, get, post, put, q } from '../lib/api'
 import { useDados, useEstado } from '../lib/estado'
 import { brl, nomeMes } from '../lib/formato'
 import type { Compra, Divida, Pagamento } from '../lib/tipos'
@@ -71,7 +72,8 @@ function Detalhe({ pessoa, fechar, pagar }: { pessoa: string | null; fechar: () 
 }
 
 function ConteudoDetalhe({ pessoa, pagar }: { pessoa: string; pagar: (p: string) => void }) {
-  const { mes, inicio } = useEstado()
+  const { mes, inicio, atualizar, avisar } = useEstado()
+  const [perguntar, confirmacao] = useConfirmar()
   const [todos, setTodos] = useState<'mes' | 'todos'>('mes')
   const [editar, setEditar] = useState<Compra | null>(null)
   const [editarPagamento, setEditarPagamento] = useState<Pagamento | null>(null)
@@ -139,15 +141,26 @@ function ConteudoDetalhe({ pessoa, pagar }: { pessoa: string; pagar: (p: string)
       <Modal titulo="Editar pagamento" aberto={editarPagamento !== null} fechar={() => setEditarPagamento(null)}>
         {editarPagamento && (
           <FormEditarPagamento pagamento={editarPagamento} fechar={() => setEditarPagamento(null)}
-            recarregar={pagamentos.tentarDeNovo} />
+            recarregar={pagamentos.tentarDeNovo}
+            apagar={() => {
+              const p = editarPagamento
+              setEditarPagamento(null)
+              perguntar(`Apagar o pagamento de ${brl(p.valor)} de ${p.pessoa}? O valor volta a ficar em aberto.`, async () => {
+                await del(`/api/pagamentos/${p.id}`)
+                await atualizar()
+                pagamentos.tentarDeNovo()
+                avisar('Pagamento apagado.')
+              })
+            }} />
         )}
       </Modal>
+      {confirmacao}
     </>
   )
 }
 
-function FormEditarPagamento({ pagamento, fechar, recarregar }: {
-  pagamento: Pagamento; fechar: () => void; recarregar: () => void
+function FormEditarPagamento({ pagamento, fechar, recarregar, apagar }: {
+  pagamento: Pagamento; fechar: () => void; recarregar: () => void; apagar: () => void
 }) {
   const { inicio, atualizar, avisar } = useEstado()
   const [pessoa, setPessoa] = useState(pagamento.pessoa)
@@ -160,7 +173,7 @@ function FormEditarPagamento({ pagamento, fechar, recarregar }: {
       recarregar()
       fechar()
       avisar('Pagamento corrigido.')
-    }}>
+    }} extra={<button type="button" className="botao perigo-texto" onClick={apagar}>Apagar</button>}>
       <Campo rotulo="Pessoa">{(id) => (
         <>
           <input id={id} value={pessoa} onChange={(e) => setPessoa(e.target.value)} list={`${id}-l`} required />

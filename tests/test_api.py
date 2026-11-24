@@ -98,6 +98,16 @@ def test_editar_pagamento(cliente):
     assert cliente.put("/api/pagamentos/99999", json={"pessoa": "Pai", "valor": 1}).status_code == 400
 
 
+def test_apagar_pagamento(cliente):
+    cliente.post("/api/compras", json={"cartao": "Nubank", "item": "Tênis", "valor_parcela": 200,
+                                       "pessoa": "Pai"})
+    pid = cliente.post("/api/pagamentos", json={"pessoa": "Pai", "valor": 50}).json()["id"]
+    assert cliente.delete(f"/api/pagamentos/{pid}").json() == {"ok": True}
+    assert cliente.get("/api/pagamentos/Pai").json() == []
+    assert cliente.get("/api/emprestimos").json()[0]["em_aberto"] == 200
+    assert cliente.delete(f"/api/pagamentos/{pid}").status_code == 400
+
+
 def test_caixinhas(cliente):
     cliente.post("/api/caixinhas", json={"dono": "Eu", "nome": "Viagem", "valor": 100})
     cid = cliente.get("/api/caixinhas").json()["caixinhas"][0]["id"]

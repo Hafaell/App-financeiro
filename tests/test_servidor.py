@@ -40,6 +40,12 @@ def test_editar_pagamento_pela_ayla(app):
     assert servidor.editar_pagamento(id_)["ok"] is False
 
 
+def test_apagar_pagamento_pela_ayla(app):
+    id_ = app.registrar_pagamento("Tio Apaga", "R$ 50,00")
+    assert servidor.apagar_pagamento(id_) == {"ok": True}
+    assert servidor.listar_pagamentos("Tio Apaga") == []
+
+
 def test_virar_mes_pela_ayla_devolve_a_copia(app, tmp_path):
     r = servidor.virar_mes()
     assert r["backup"].startswith(str(tmp_path))
