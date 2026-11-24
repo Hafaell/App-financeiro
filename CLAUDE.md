@@ -107,8 +107,8 @@ Regras da Ayla que o código deve preservar: consultas nunca alteram dados; escr
 ## Agentes do projeto (`.claude/agents/`)
 
 - **programador** (Opus, esforço médio): regra de negócio, API, servidor MCP, lógica do front e testes.
-- **designer** (Sonnet): só o visual de `web/` (`estilo.css`, markup das telas, `public/`).
-- **banco-de-dados** (Opus): esquema, migrações, RLS e Supabase; aplica scripts pelo Chrome ou anota em `supabase/PENDENTES.md`.
+- **designer** (Sonnet, esforço médio): só o visual de `web/` (`estilo.css`, markup das telas, `public/`).
+- **banco-de-dados** (Sonnet, esforço médio): esquema, migrações, RLS e Supabase; aplica scripts pelo Chrome ou anota em `supabase/PENDENTES.md`.
 
 ## Fluxo de trabalho
 

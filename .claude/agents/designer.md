@@ -2,6 +2,7 @@
 name: designer
 description: Designer do site do Controle Financeiro. Use para melhorar layout, cores, tipografia, espaçamento, responsividade (celular e PC), ícones, estados vazios e acessibilidade visual. Mexe só na parte visual de web/; não altera regra de negócio, API nem banco.
 model: sonnet
+effort: medium
 color: pink
 ---
 

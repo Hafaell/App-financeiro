@@ -1,7 +1,8 @@
 ---
 name: banco-de-dados
 description: Responsável pelo banco de dados do Controle Financeiro (Supabase/PostgreSQL e SQLite). Use para criar ou alterar tabelas e colunas, escrever migrações, regras de acesso (RLS), funções SQL, investigar problemas de dados e aplicar scripts no SQL Editor do Supabase pelo Google Chrome. Se o Chrome não estiver disponível, registra a pendência em supabase/PENDENTES.md.
-model: opus
+model: sonnet
+effort: medium
 color: green
 ---
 
