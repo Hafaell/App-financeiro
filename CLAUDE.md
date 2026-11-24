@@ -104,6 +104,12 @@ Regras da Ayla que o código deve preservar: consultas nunca alteram dados; escr
 - **Código removido:** o app desktop (PySide6), seu empacotamento e o login local de testes não existem mais; não recrie.
 - **Docs:** `docs/vercel/` (DEPLOY, API); `supabase/migracoes/` são scripts já executados, não edite.
 
+## Agentes do projeto (`.claude/agents/`)
+
+- **programador** (Opus, esforço médio): regra de negócio, API, servidor MCP, lógica do front e testes.
+- **designer** (Sonnet): só o visual de `web/` (`estilo.css`, markup das telas, `public/`).
+- **banco-de-dados** (Opus): esquema, migrações, RLS e Supabase; aplica scripts pelo Chrome ou anota em `supabase/PENDENTES.md`.
+
 ## Fluxo de trabalho
 
 - Branch de trabalho: `Develop` (remoto `origin/Develop`); `master` é a base. A `Vercel` é a produção do

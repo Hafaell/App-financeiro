@@ -13,5 +13,7 @@ Rode os scripts de `migracoes/` no SQL Editor do Supabase, **na ordem**:
 | `07_historico_caixinhas.sql` | Cria o histórico das caixinhas (cada valor guardado, retirado ou ajustado) | Uma vez; depois feche e abra o app. Sem ele, o app funciona, só sem histórico |
 | `08_backups_web.sql` | Cria a tabela das cópias de segurança da versão web (antes da virada e antes de restaurar) | Uma vez, antes de usar o site. Sem ele, o site não deixa virar o mês |
 
+Scripts novos que ainda não foram rodados ficam listados em `PENDENTES.md`.
+
 O site usa `VITE_SUPABASE_URL` e `VITE_SUPABASE_CHAVE` (veja `docs/vercel/DEPLOY.md`); a Ayla guarda a conexão
 com `python -m controle_financeiro.servidor_claude entrar`.
