@@ -111,3 +111,11 @@ direto. Por isso há rotas que juntam o que uma tela precisa (`/api/inicio`, `/a
 | GET | `/api/backups` | `listar_backups()` (tabela `backups`, script `08_backups_web.sql`) |
 | POST | `/api/backups/restaurar` | `restaurar_backup(id)` |
 | POST | `/api/backups/exportar` | `gerar_backup(senha)`; responde o arquivo `.cfbak` para baixar |
+
+## Servidor MCP (Claude no celular e na web)
+
+| Rota | O que faz |
+|---|---|
+| `POST/GET/DELETE /api/mcp` | MCP (Streamable HTTP, sem estado). Exige `Authorization: Bearer <token do Supabase>`; sem token válido responde 401 com `WWW-Authenticate: Bearer resource_metadata=...` |
+| `GET /.well-known/oauth-protected-resource` (e `.../api/mcp`) | Diz ao Claude que o login é o OAuth do Supabase (`authorization_servers`) |
+| `/oauth/consent` (página do site) | Tela "Permitir acesso?" para onde o Supabase manda o usuário |

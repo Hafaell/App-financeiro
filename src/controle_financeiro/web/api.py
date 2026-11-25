@@ -510,3 +510,36 @@ def exportar(fin: Fin, dados: Exportar):
     nome = f"controle-financeiro_{date.today().isoformat()}.cfbak"
     return Response(fin.gerar_backup(dados.senha), media_type="application/octet-stream",
                     headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+
+
+# ----- servidor MCP pela internet (o Claude no celular e na web), em /api/mcp -----
+
+def _financas_do_token(token: str) -> Financas:
+    return financas(f"Bearer {token}")
+
+
+def _token_valido(token: str) -> bool:
+    from controle_financeiro.dados.banco import configuracao_supabase
+    from controle_financeiro.servidor_claude.remoto import validar_token_supabase
+    url, chave = configuracao_supabase()
+    return validar_token_supabase(url, chave)(token)
+
+
+from controle_financeiro.servidor_claude.remoto import registrar_mcp  # noqa: E402
+
+registrar_mcp(app, _financas_do_token, _token_valido)
+
+
+@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/api/mcp")
+def metadados_do_recurso(request: Request):
+    """Diz ao Claude onde fazer o login do MCP: o OAuth do próprio Supabase (RFC 9728)."""
+    from controle_financeiro.dados.banco import configuracao_supabase
+    url, _ = configuracao_supabase()
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    return {
+        "resource": f"https://{host}/api/mcp",
+        "authorization_servers": [f"{url}/auth/v1"],
+        "scopes_supported": ["email", "profile"],
+        "bearer_methods_supported": ["header"],
+    }
