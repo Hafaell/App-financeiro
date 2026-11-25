@@ -6,6 +6,7 @@ import { get } from './lib/api'
 import { ProvedorEstado } from './lib/estado'
 import { configurado, MODO_LOCAL, supabase } from './lib/supabase'
 import type { Inicio } from './lib/tipos'
+import { Consentimento } from './paginas/Consentimento'
 import { Login } from './paginas/Login'
 import { VisaoGeral } from './paginas/VisaoGeral'
 import { Transacoes } from './paginas/Transacoes'
@@ -54,6 +55,7 @@ export function App() {
   }
   if (sessao === undefined) return <div className="tela-cheia"><Carregando /></div>
   if (!MODO_LOCAL && !sessao) return <Login />
+  if (window.location.pathname === '/oauth/consent') return <Consentimento />
 
   const meta = sessao?.user.user_metadata as { nome?: string } | undefined
   const nome = MODO_LOCAL ? 'Modo local' : meta?.nome || sessao?.user.email || ''

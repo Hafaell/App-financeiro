@@ -96,3 +96,27 @@ cada 15 s (e ao voltar para a aba).
 
 As cópias antes da virada ficam em lugares diferentes: a Ayla salva em arquivo no PC e o site salva na tabela `backups` do Supabase
 (Ferramentas > Cópias automáticas do site).
+
+## 9. Claude no celular (servidor MCP pela internet)
+
+O Claude do celular e do site fala com `https://<seu-site>/api/mcp`. O login é o OAuth do próprio
+Supabase (recurso em beta, grátis). Faça uma vez, nesta ordem:
+
+1. **Supabase > Authentication > OAuth Server**: ligue "OAuth 2.1 server capabilities" e em
+   *Authorization Path* escreva `/oauth/consent`. (A *Site URL* em URL Configuration já é a do site.)
+   Confira abrindo `https://<ref>.supabase.co/.well-known/oauth-authorization-server/auth/v1`: a lista
+   `code_challenge_methods_supported` precisa conter `"S256"` (o Claude exige).
+2. **Supabase > Authentication > OAuth Apps > New**: nome `Claude`, tipo público (sem secret), com a
+   *Redirect URI* `https://claude.ai/api/mcp/auth_callback`. Anote o **Client ID**.
+3. Teste antes em uma *prévia* (envie a branch `mcp-remoto` ao GitHub: o Vercel cria um endereço de teste;
+   veja `/api/saude`, o JSON abaixo e que um POST em `/api/mcp` responde 401). O login completo só
+   funciona depois do merge na branch `Vercel`, porque a Site URL do Supabase aponta para a produção.
+   Publique (merge na `Vercel`) e confira `https://<seu-site>/.well-known/oauth-protected-resource`:
+   deve mostrar um JSON com `resource` e `authorization_servers`.
+4. **claude.ai > Settings > Connectors > Add custom connector**: URL `https://<seu-site>/api/mcp`;
+   em *Advanced settings* escolha usar o seu próprio cliente OAuth e cole o Client ID do passo 2
+   (secret em branco). Clique em Connect, entre com o e-mail e a senha do app e toque em **Permitir**.
+5. O conector aparece sozinho no app do celular (mesma conta do Claude). Se usar o Claude Desktop com
+   o servidor local da Ayla, deixe só um dos dois ligados para não duplicar as ferramentas.
+
+Se o Claude disser que não achou o servidor de autorização: reveja o passo 1 e o endereço do passo 3.
